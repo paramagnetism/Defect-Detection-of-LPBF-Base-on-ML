@@ -16,7 +16,7 @@ class FindRect:
         self.sorting_slope = 10 if rectnum == 22 else 0.55
         self.__type__ = 'val_mean'
         self._gray = np.zeros((2,2))
-        self.erosion = np.zeros((2,2))
+        self.erosion = np.zeros((2,2)) 
         self.strip_color = []
         
     # show the image in 1/2 size for the screen
@@ -115,7 +115,7 @@ class FindRect:
                         rst = {'Degree':line*10+45, 
                                'Part No.':row+1, 
                                'Strip No. on part':strip+1,
-                               valname : self._Mean[count]}
+                               valname : self.mean[count]}
                         self.strip_color.append(rst)
                         count += 1
         # 27 rect

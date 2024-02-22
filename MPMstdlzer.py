@@ -5,7 +5,8 @@ Created on Tue Jan 23 09:48:16 2024
 @author: Wilson Li
 """
 import os
-from MPM_mean import *
+from MPM_mean import Pointlist, MPM_mean
+from data2excel import XLS
 
 def getCalib(rootdir, rectnum, axis):
     divpart = 5 if rectnum == 22 else 1

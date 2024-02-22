@@ -137,7 +137,7 @@ class Model3D:
             if key < start_idx - self.badmpm or key > end_idx + self.badmpm:
                 del self.__buffer[key]
                 
-    def calibMPM(self, Range, idxmask, savename = 'Model3D/demp.npy'):
+    def calibMPM(self, Range, idxmask, savename = '../LargeFiles/demo'):
         [start_idx, end_idx] = Range
         # Calib MPM
         print('Reading data')
@@ -226,13 +226,13 @@ class Model3D:
         return src, vol
         
 if __name__ == '__main__':
-    model3Dname = 'Model3D/demo_aftr.npy'
+    model3Dname = '../LargeFiles/demo_aftr.npy'
     if os.path.exists(model3Dname):
         obj = Model3D(model3Dname)
     else:
         obj = Model3D(['D:\OT', 'D:\MPMTIFF'])
         obj.calibMPM(Range = [0,200],
                      idxmask = [i for i in range(22)],
-                     savename = 'Model3D/demo')
+                     savename = '../LargeFiles/demo')
     src, vol = obj.Model_3D()
     mlab.show()
