@@ -10,9 +10,7 @@ import pickle
 import numpy as np
 from mayavi import mlab
 from tqdm import tqdm
-from sklearn.model_selection import GridSearchCV
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
+
 # local lib
 from OT_mean import OT_mean
 from MPM_mean import MPM_mean
@@ -212,7 +210,7 @@ class Model3D:
 
     def Model_3D(self):
         print('Rendering…………')
-        pixel_length_cm = 25 / 2500  # cm
+        pixel_length_cm = 1e-2  # cm
         pixel_depth_cm = 30e-4  # cm
         # Resample the slices to represent the exact length and Create mesh grid
         xx, yy, zz = np.meshgrid(np.arange(0, self.Slices.shape[0]) * pixel_length_cm,
@@ -222,7 +220,7 @@ class Model3D:
         # Visualize using Mayavi
         src = mlab.pipeline.scalar_field(xx, yy, zz, self.Slices)
         vol = mlab.pipeline.iso_surface(src)
-        vol.actor.property.opacity = 0.5
+        vol.actor.property.opacity = 2
         return src, vol
         
 if __name__ == '__main__':
