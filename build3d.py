@@ -141,8 +141,6 @@ class Model3D:
         print('Reading data')
         indexs = list(range(start_idx, end_idx))  # All index
         self.__loadfiles([start_idx, start_idx + self.__calib]) # Initialize
-        # MASK for floodfill
-        MASK = np.zeros((2502, 2502)).astype(np.uint8)
         # Memorize the deprecated MPM
         self.deprecated_mpm = []
         self.Slices = []
@@ -154,7 +152,7 @@ class Model3D:
                 for j, otstrip in enumerate(self.__buffer[i].OT_strip):
                     OTmean = otstrip['OT_mean']
                     depth.append(self.OTmodel.predict(np.array([[OTmean, 370, 1300]])))
-            else: 
+            else:  # calculate the depth
                 last_depcount = 0
                 while True:
                     deprcount = 0
@@ -188,10 +186,15 @@ class Model3D:
                     depth.append(self.model.predict(np.array([[OTmean, calib, 370, 1300]])))
             
             # paint the depth on map
-            for j, ctr in enumerate(self.__buffer[i].ctrs):
-                color = depth[j] if j in idxmask else 0.0
-                cv2.floodFill(self.__buffer[i].region, MASK, ctr, color, 
-                              (1,1,1),(1,1,1), cv2.FLOODFILL_FIXED_RANGE)
+            for j in idxmask:
+                # !! This mask should set to np.zeros every time calling the function
+                cv2.floodFill(self.__buffer[i].region, np.zeros((2502, 2502)).astype(np.uint8), 
+                              self.__buffer[i].ctrs[j], depth[j], 
+                              1, 1, cv2.FLOODFILL_FIXED_RANGE)
+            
+            # remove noise from floodfill and unfilled region
+            self.__buffer[i].region[self.__buffer[i].region > max(depth)+1] = 0
+            self.__buffer[i].region[self.__buffer[i].region < min(depth)-1] = 0
             self.Slices.append(self.__buffer[i].region)
         
         # Transpose for 3D drawing
@@ -202,11 +205,17 @@ class Model3D:
             idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
             self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
         np.save(savename + '_original', self.Slices)
-        # update depth 
+        # update depth
         for i in range(self.Slices.shape[2]-1):
             upper = self.Slices[:,:,-i-1]-30
             self.Slices[:,:,-i-2] = np.maximum(self.Slices[:,:,-i-2], upper)
         np.save(savename + '_aftr', self.Slices)
+        
+    def testSlice(self, i):
+        #cv2.imshow('test', obj.Slices[:,:,0].astype(np.uint8))
+        cv2.imshow('test',cv2.resize(self.Slices[:,:,i].astype(np.uint8),(1000,1000)))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     def Model_3D(self):
         print('Rendering…………')
@@ -220,11 +229,11 @@ class Model3D:
         # Visualize using Mayavi
         src = mlab.pipeline.scalar_field(xx, yy, zz, self.Slices)
         vol = mlab.pipeline.iso_surface(src)
-        vol.actor.property.opacity = 2
+        vol.actor.property.opacity = 0.5
         return src, vol
         
 if __name__ == '__main__':
-    model3Dname = '../LargeFiles/demo_aftr.npy'
+    model3Dname = '../LargeFiles/demo_original.npy'
     if os.path.exists(model3Dname):
         obj = Model3D(model3Dname)
     else:
@@ -232,5 +241,6 @@ if __name__ == '__main__':
         obj.calibMPM(Range = [0,200],
                      idxmask = [i for i in range(22)],
                      savename = '../LargeFiles/demo')
+    # obj.testSlice(6)
     src, vol = obj.Model_3D()
     mlab.show()
