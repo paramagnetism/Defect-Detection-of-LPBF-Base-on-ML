@@ -10,7 +10,7 @@ import pickle
 import numpy as np
 from mayavi import mlab
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
 
 # local lib
@@ -220,6 +220,9 @@ class Model3D:
         # np.save(savename + '_aftr', self.Slices)
         self.__Save01(Savename = savename + '_aftr')
         
+        # return self.Slices
+        
+    
     def __Save01(self, Savename):
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
         Slices[self.Slices>0] = 255
@@ -245,21 +248,49 @@ class Model3D:
         vol = mlab.pipeline.iso_surface(src)
         vol.actor.property.opacity = 0.5
         return src, vol
-        
-    def Model_2D(self):
+    
+    # This function is a faliure    
+    def Model_2D(self, loadname):
         print('Rendering…………')
         
-    
+        original = np.load(loadname + '_original.npy')
+        aftr = np.load(loadname + '_aftr.npy')
+        # Filter aftr where original is 0
+        # diff = np.where(original == 0, aftr, 0)
+        x_scale = y_scale = 0.04
+        z_scale = 0.003
+        # Plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        # indices = np.nonzero(diff)
+        
+        # Plot non-zero points
+        for i in tqdm(range(aftr.shape[0]>>2)):
+            for j in range(aftr.shape[1]>>2):
+                for k in range(aftr.shape[2]):
+                    if original[i<<2, j<<2, k] < aftr[i<<2, j<<2, k]:
+                        ax.scatter(i * x_scale, j * y_scale, k * z_scale, color='red', alpha = 1)
+                    elif original[i, j, k] > 0:
+                        ax.scatter(i * x_scale, j * y_scale, k * z_scale, color='gray', alpha = 1)
+                
+        ax.set_xlabel('X (cm)')
+        ax.set_ylabel('Y (cm)')
+        ax.set_zlabel('Z (cm)')
+        
+        plt.title('Region Representation in 3D')
+        plt.show()
     
 if __name__ == '__main__':
-    model3Dname = '../LargeFiles/demo_original.npy'
-    if os.path.exists(model3Dname):
-        obj = Model3D(model3Dname)
+    model3Dname = '../LargeFiles/demo'
+    openname = model3Dname + '_original.npy'
+    if os.path.exists(openname):
+        obj = Model3D(openname)
     else:
         obj = Model3D(['D:\OT', 'D:\MPMTIFF'])
         obj.calibMPM(Range = [0,200],
                      idxmask = [i for i in range(22)],
-                     savename = '../LargeFiles/demo')
+                     savename = model3Dname)
+    obj.Model_2D(loadname = model3Dname)
     # obj.testSlice(6)
     # src, vol = obj.Model_3D()
     # mlab.show()
