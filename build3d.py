@@ -9,6 +9,8 @@ import cv2
 import pickle
 import numpy as np
 from mayavi import mlab
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
 
 # local lib
@@ -66,7 +68,7 @@ class Slice:
             self.ctrs = MPM.ctrs
             
         except IndexError:
-            print('MPM image deprecated in '+MPM_root)
+            print(MPM_root +' deprecated!')
             self.MPM_strip = 0
             # need to resize the OT image to MPM scale
             self.region = cv2.resize(OT.erosion, (2500,2500)).astype(np.float32)
@@ -144,6 +146,7 @@ class Model3D:
         # Memorize the deprecated MPM
         self.deprecated_mpm = []
         self.Slices = []
+        self.depths = []
         for i in tqdm(indexs):  # for all mpm mean
             depth = []            
             # if MPM image is corrupted
@@ -185,6 +188,8 @@ class Model3D:
                     calib = mpmstrip['MPM_mean']/Std[j]/1300*10000
                     depth.append(self.model.predict(np.array([[OTmean, calib, 370, 1300]])))
             
+            self.depths.append(depth)
+            
             # paint the depth on map
             for j in idxmask:
                 # !! This mask should set to np.zeros every time calling the function
@@ -204,14 +209,23 @@ class Model3D:
         for i in self.deprecated_mpm:
             idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
             self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
-        np.save(savename + '_original', self.Slices)
+        # np.save(savename + '_original', self.Slices)  # Too large to save
+        self.__Save01(Savename = savename + '_original')
+        np.save(savename + '_depths', np.array(self.depths))
+        
         # update depth
         for i in range(self.Slices.shape[2]-1):
             upper = self.Slices[:,:,-i-1]-30
             self.Slices[:,:,-i-2] = np.maximum(self.Slices[:,:,-i-2], upper)
-        np.save(savename + '_aftr', self.Slices)
+        # np.save(savename + '_aftr', self.Slices)
+        self.__Save01(Savename = savename + '_aftr')
         
-    def testSlice(self, i):
+    def __Save01(self, Savename):
+        Slices = np.zeros(self.Slices.shape).astype(np.uint8)
+        Slices[self.Slices>0] = 255
+        np.save(Savename, Slices)
+        
+    def ShowSlice(self, i):
         #cv2.imshow('test', obj.Slices[:,:,0].astype(np.uint8))
         cv2.imshow('test',cv2.resize(self.Slices[:,:,i].astype(np.uint8),(1000,1000)))
         cv2.waitKey(0)
@@ -232,6 +246,11 @@ class Model3D:
         vol.actor.property.opacity = 0.5
         return src, vol
         
+    def Model_2D(self):
+        print('Rendering…………')
+        
+    
+    
 if __name__ == '__main__':
     model3Dname = '../LargeFiles/demo_original.npy'
     if os.path.exists(model3Dname):
@@ -242,5 +261,5 @@ if __name__ == '__main__':
                      idxmask = [i for i in range(22)],
                      savename = '../LargeFiles/demo')
     # obj.testSlice(6)
-    src, vol = obj.Model_3D()
-    mlab.show()
+    # src, vol = obj.Model_3D()
+    # mlab.show()
