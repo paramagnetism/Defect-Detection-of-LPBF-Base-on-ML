@@ -137,7 +137,7 @@ class Model3D:
             if key < start_idx - self.badmpm or key > end_idx + self.badmpm:
                 del self.__buffer[key]
                 
-    def calibMPM(self, Range, idxmask, savename = '../LargeFiles/demo'):
+    def calibMPM(self, Range, idxmask, savename = 'Files/demo'):
         [start_idx, end_idx] = Range
         # Calib MPM
         print('Reading data')
@@ -149,8 +149,8 @@ class Model3D:
         self.depths = []
         for i in tqdm(indexs):  # for all mpm mean
             depth = []            
-            # if MPM image is corrupted
-            if self.__buffer[i].MPM_strip == 0:
+            # Check if MPM image is corrupted
+            if self.__CheskMPM(i):
                 self.deprecated_mpm.append(i)
                 for j, otstrip in enumerate(self.__buffer[i].OT_strip):
                     OTmean = otstrip['OT_mean']
@@ -220,8 +220,15 @@ class Model3D:
         # np.save(savename + '_aftr', self.Slices)
         self.__Save01(Savename = savename + '_aftr')
         
-        # return self.Slices
-        
+    # To avoid inconsistent cube recognition
+    def __CheskMPM(self, i):
+        if self.__buffer[i].MPM_strip == 0:
+            return True
+        elif i > 0:
+            for j, ctr in enumerate(self.__buffer[i].ctrs):
+                if np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2)) > 20:
+                    return True
+        return False
     
     def __Save01(self, Savename):
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
@@ -233,8 +240,20 @@ class Model3D:
         cv2.imshow('test',cv2.resize(self.Slices[:,:,i].astype(np.uint8),(1000,1000)))
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-
-    def Model_3D(self):
+        
+    def ShowVideo(self):
+        cv2.namedWindow('test', cv2.WINDOW_NORMAL)
+        for i in range(self.Slices.shape[2]):
+            slice_resized = cv2.resize(self.Slices[:,:,i], (500, 500))
+            cv2.putText(slice_resized, str(i), (20, 20), 
+                        cv2.FONT_HERSHEY_COMPLEX, 0.5, (255), 1)
+            cv2.imshow('test', slice_resized)
+            if cv2.waitKey(30) & 0xFF == ord('q'):
+                break
+        cv2.destroyAllWindows()
+        
+        
+    def Model_3D_surface(self):
         print('Rendering…………')
         pixel_length_cm = 1e-2  # cm
         pixel_depth_cm = 30e-4  # cm
@@ -249,6 +268,38 @@ class Model3D:
         vol.actor.property.opacity = 0.5
         return src, vol
     
+    # Success plot
+    def Model_3D_dots(self, originalPath, aftrPath):
+        original = np.load(originalPath)
+        aftr = np.load(aftrPath)
+        x, y, z = np.indices(original.shape)
+        
+        x_real = x * 0.01
+        y_real = y * 0.01
+        z_real = z * 0.003
+        
+        indices_original = np.argwhere(original > 0)
+        np.random.shuffle(indices_original)
+        indices_original = indices_original[:50000]
+        
+        indices_aftr_only = np.argwhere(aftr > original)
+        np.random.shuffle(indices_aftr_only)
+        indices_aftr_only = indices_aftr_only[:10000]
+        
+        fig = mlab.figure(size=(800,800))
+        mlab.points3d(x_real[indices_original[:, 0], indices_original[:, 1], indices_original[:, 2]],
+              y_real[indices_original[:, 0], indices_original[:, 1], indices_original[:, 2]],
+              z_real[indices_original[:, 0], indices_original[:, 1], indices_original[:, 2]],
+              color=(0, 1, 0), mode='point', scale_factor=1)
+
+        mlab.points3d(x_real[indices_aftr_only[:, 0], indices_aftr_only[:, 1], indices_aftr_only[:, 2]],
+              y_real[indices_aftr_only[:, 0], indices_aftr_only[:, 1], indices_aftr_only[:, 2]],
+              z_real[indices_aftr_only[:, 0], indices_aftr_only[:, 1], indices_aftr_only[:, 2]],
+              color=(1, 0, 0), mode='point', scale_factor=1)
+
+        mlab.show()
+        return fig
+        
     # This function is a faliure    
     def Model_2D(self, loadname):
         print('Rendering…………')
@@ -281,16 +332,21 @@ class Model3D:
         plt.show()
     
 if __name__ == '__main__':
-    model3Dname = '../LargeFiles/demo'
+    model3Dname = 'Files/demo'
     openname = model3Dname + '_original.npy'
     if os.path.exists(openname):
         obj = Model3D(openname)
     else:
-        obj = Model3D(['D:\OT', 'D:\MPMTIFF'])
+        obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
         obj.calibMPM(Range = [0,200],
                      idxmask = [i for i in range(22)],
                      savename = model3Dname)
-    obj.Model_2D(loadname = model3Dname)
-    # obj.testSlice(6)
-    # src, vol = obj.Model_3D()
+
+    fig = obj.Model_3D_dots(model3Dname+ '_original.npy',
+                        model3Dname+ '_aftr.npy')
+    
+    # obj.ShowSlice(162)
+    # obj.ShowVideo()
+    
+    # src, vol = obj.Model_3D_surface()
     # mlab.show()
