@@ -62,7 +62,7 @@ class Model3D:
 
 
     class _Slice:
-        def __init__(self, OT_picname, MPM_root, mode, rectnum = 22):
+        def __init__(self, OT_picname, MPM_root, mode, rectnum = 22, useOT = False):
             OT = OT_mean(OT_picname, rectnum = rectnum)
             OT.divpart = 1
             OT.FullProcess()
@@ -93,10 +93,9 @@ class Model3D:
                     MPM.cal_mean(point_list, show = False)
                     
             try:  # if the MPM figure is corrupted
+                if useOT:
+                    raise IndexError('In consistent deprecated detected')
                 MPM.matching_strip()
-                self.MPM_strip = MPM.strip_color
-                self.region = MPM.erosion.astype(np.float32)
-                self.ctrs = MPM.ctrs
                 
             except IndexError:
                 print('\n'+MPM_root+' deprecated, use OT instead')
@@ -105,30 +104,38 @@ class Model3D:
                 self.region = cv2.resize(OT.erosion, (2500,2500)).astype(np.float32)
                 self.ctrs = OT.ctrs
                 # self.region = np.zeros((2500,2500))
-        
+                
+            else:
+                self.MPM_strip = MPM.strip_color
+                self.region = MPM.erosion.astype(np.float32)
+                self.ctrs = MPM.ctrs
+    
+    def _idx2name(self, i):
+        # Can change MPM to pic
+        numb = (i + 1) * 3
+        ten = numb % 100
+        hund = int((numb - ten)/100)
+        MPM_name = '00'+ str(hund)+ '_' + str(ten).zfill(2) + '0'
+        OT_name = 'SI246120231031190932_' + str(i)+'_' + MPM_name +'_' \
+            + self.__OT_type + '_32F.tif'
+        OT_name = os.path.join(self.OT_root, OT_name)
+        # if MPM is from excel files
+        MPM_name1 = os.path.join(self.MPM_root, MPM_name)
+        if os.path.exists(MPM_name1):
+            MPM_name = MPM_name1 
+        else:
+            self.__MPM_type = 'on' if self.__MPM_type == 1 else 'off'
+            MPM_name = 'Vaildation print 31102023_SI246120231031190932_' \
+                + MPM_name + '_00.mpm_ma_' + self.__MPM_type + 'axis.tif'
+            MPM_name = os.path.join(self.MPM_root, MPM_name)
+        return OT_name, MPM_name
+    
     # Given index name, update value in self.__buffer    
     def __loadfiles(self, Range):
         [start_idx, end_idx] = Range
         for i in range(start_idx, end_idx):
             if i not in self.__buffer.keys():
-                # Can change MPM to pic
-                numb = (i + 1) * 3
-                ten = numb % 100
-                hund = int((numb - ten)/100)
-                MPM_name = '00'+ str(hund)+ '_' + str(ten).zfill(2) + '0'
-                OT_name = 'SI246120231031190932_' + str(i)+'_' + MPM_name +'_' \
-                    + self.__OT_type + '_32F.tif'
-                OT_name = os.path.join(self.OT_root, OT_name)
-                
-                # if MPM is from excel files
-                MPM_name1 = os.path.join(self.MPM_root, MPM_name)
-                if os.path.exists(MPM_name1):
-                    MPM_name = MPM_name1 
-                else:
-                    self.__MPM_type = 'on' if self.__MPM_type == 1 else 'off'
-                    MPM_name = 'Vaildation print 31102023_SI246120231031190932_' \
-                        + MPM_name + '_00.mpm_ma_' + self.__MPM_type + 'axis.tif'
-                    MPM_name = os.path.join(self.MPM_root, MPM_name)
+                OT_name, MPM_name = self._idx2name(i)
                 self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type)})
                 # print('read index'+str(i))
                 
@@ -228,9 +235,10 @@ class Model3D:
     def __CheskMPM(self, i, maxdis = 200,  show = False):
         for j, ctr in enumerate(self.__buffer[i].ctrs):
             dis = np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2))
-            if  dis > maxdis:
+            if dis > maxdis:
                 print("\nIn consistent deprecated detected on "+str(i)+" : " \
                       +str(j)+'distance ='+str(dis))
+                    
                 if show:
                     img1 = cv2.cvtColor(self.__buffer[i-1].region, cv2.COLOR_GRAY2BGR)
                     img2 = cv2.cvtColor(self.__buffer[i].region, cv2.COLOR_GRAY2BGR)
@@ -248,6 +256,10 @@ class Model3D:
                     cv2.imshow("img"+str(i),img2)
                     cv2.waitKey()
                     cv2.destroyAllWindows()
+                    
+                OT_name, MPM_name = self._idx2name(i)
+                # Replace the corrupted with OT
+                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type, useOT = True)})
                 return True
         return False
     
