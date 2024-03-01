@@ -18,65 +18,8 @@ from OT_mean import OT_mean
 from MPM_mean import MPM_mean
 from findrect import Pointlist
 
-def ReadModels(dirct = 'models/'):
-    models = []
-    for root, dirs, files in os.walk(dirct):
-        filenames = [os.path.join(root, filename) for filename in files]
-        filenames.sort(key = lambda x: -len(x))
-    for filename in filenames:
-        with open(filename,"rb") as f:
-            loaded = pickle.load(f)
-        models.append(loaded)
-    return models
-
-
-class Slice:
-    def __init__(self, OT_picname, MPM_root, mode, rectnum = 22):
-        OT = OT_mean(OT_picname, rectnum = rectnum)
-        OT.divpart = 1
-        OT.FullProcess()
-        OT.cal_mean(show = False) 
-        OT.matching_strip()
-        self.OT_strip = OT.strip_color
-        
-        # if tiff image
-        if MPM_root[-4:] == '.tif':
-            MPM = MPM_mean(MPM_root, rectnum = rectnum)
-            MPM.divpart = 1
-            MPM.FullProcess()
-            MPM.cal_mean([], show = False) # 5 / 1
-        
-        # if is root name
-        else:
-            for root, dirs, files in os.walk(MPM_root):
-                files.sort()
-                filenames = [os.path.join(root, filename) for filename in files]
-                
-                # Use modol = on as default
-                point_list = Pointlist(filenames[2], filenames[3], 
-                                       filenames[mode], params = 'anticlock')
-                
-                gray = point_list.imshow()
-                MPM = MPM_mean(gray, rectnum = rectnum)
-                MPM.FullProcess()
-                MPM.cal_mean(point_list, show = False)
-                
-        try:  # if the MPM figure is corrupted
-            MPM.matching_strip()
-            self.MPM_strip = MPM.strip_color
-            self.region = MPM.erosion.astype(np.float32)
-            self.ctrs = MPM.ctrs
-            
-        except IndexError:
-            print(MPM_root +' deprecated!')
-            self.MPM_strip = 0
-            # need to resize the OT image to MPM scale
-            self.region = cv2.resize(OT.erosion, (2500,2500)).astype(np.float32)
-            self.ctrs = OT.ctrs
-            # self.region = np.zeros((2500,2500))
-            
 class Model3D:
-    def __init__(self, roots, Calib = 6, Param = 'IntOn', badmpm = 3):
+    def __init__(self, roots, Calib = 6, Param = 'IntOn', badmpm = 2):
         self.__calib = Calib
         if 'Int' in Param:
             self.__OT_type = 'Int'
@@ -101,11 +44,67 @@ class Model3D:
             # RAM slices
             self.__buffer = {}
             self.badmpm = badmpm
-            
-            models = ReadModels(dirct = 'models/')
+            self._ReadModels(dirct = 'models/')
             # Use MPM + OT model as default, OT only when MPM deprecated
-            self.model = models[0]['model']
-            self.OTmodel = models[1]['model']
+            
+            
+    def _ReadModels(self, dirct = 'models/'):
+        models = []
+        for root, dirs, files in os.walk(dirct):
+            filenames = [os.path.join(root, filename) for filename in files]
+            filenames.sort(key = lambda x: -len(x))
+        for filename in filenames:
+            with open(filename,"rb") as f:
+                loaded = pickle.load(f)
+            models.append(loaded)
+        self.model = models[0]['model']
+        self.OTmodel = models[1]['model']
+
+
+    class _Slice:
+        def __init__(self, OT_picname, MPM_root, mode, rectnum = 22):
+            OT = OT_mean(OT_picname, rectnum = rectnum)
+            OT.divpart = 1
+            OT.FullProcess()
+            OT.cal_mean(show = False) 
+            OT.matching_strip()
+            self.OT_strip = OT.strip_color
+            
+            # if tiff image
+            if MPM_root[-4:] == '.tif':
+                MPM = MPM_mean(MPM_root, rectnum = rectnum)
+                MPM.divpart = 1
+                MPM.FullProcess()
+                MPM.cal_mean([], show = False) # 5 / 1
+            
+            # if is root name
+            else:
+                for root, dirs, files in os.walk(MPM_root):
+                    files.sort()
+                    filenames = [os.path.join(root, filename) for filename in files]
+                    
+                    # Use modol = on as default
+                    point_list = Pointlist(filenames[2], filenames[3], 
+                                           filenames[mode], params = 'anticlock')
+                    
+                    gray = point_list.imshow()
+                    MPM = MPM_mean(gray, rectnum = rectnum)
+                    MPM.FullProcess()
+                    MPM.cal_mean(point_list, show = False)
+                    
+            try:  # if the MPM figure is corrupted
+                MPM.matching_strip()
+                self.MPM_strip = MPM.strip_color
+                self.region = MPM.erosion.astype(np.float32)
+                self.ctrs = MPM.ctrs
+                
+            except IndexError:
+                print('\n'+MPM_root+' deprecated, use OT instead')
+                self.MPM_strip = 0
+                # need to resize the OT image to MPM scale
+                self.region = cv2.resize(OT.erosion, (2500,2500)).astype(np.float32)
+                self.ctrs = OT.ctrs
+                # self.region = np.zeros((2500,2500))
         
     # Given index name, update value in self.__buffer    
     def __loadfiles(self, Range):
@@ -130,14 +129,17 @@ class Model3D:
                     MPM_name = 'Vaildation print 31102023_SI246120231031190932_' \
                         + MPM_name + '_00.mpm_ma_' + self.__MPM_type + 'axis.tif'
                     MPM_name = os.path.join(self.MPM_root, MPM_name)
-                self.__buffer.update({i:Slice(OT_name, MPM_name, self.__MPM_type)})
+                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type)})
+                # print('read index'+str(i))
+                
         # delete keys if unused        
         for key in list(self.__buffer.keys()):
             # remain some for deprecated 
             if key < start_idx - self.badmpm or key > end_idx + self.badmpm:
                 del self.__buffer[key]
+                # print('delete index'+str(key))
                 
-    def calibMPM(self, Range, idxmask, savename = 'Files/demo'):
+    def build(self, Range, idxmask, savename = 'Files/demo'):
         [start_idx, end_idx] = Range
         # Calib MPM
         print('Reading data')
@@ -148,9 +150,10 @@ class Model3D:
         self.Slices = []
         self.depths = []
         for i in tqdm(indexs):  # for all mpm mean
-            depth = []            
+            depth = []
             # Check if MPM image is corrupted
-            if self.__CheskMPM(i):
+            if self.__buffer[i].MPM_strip == 0 or \
+                (i > start_idx and self.__CheskMPM(i, maxdis = 100, show = True)):
                 self.deprecated_mpm.append(i)
                 for j, otstrip in enumerate(self.__buffer[i].OT_strip):
                     OTmean = otstrip['OT_mean']
@@ -163,7 +166,7 @@ class Model3D:
                     nearest = sorted(indexs, key = lambda n: abs(i - n))[:self.__calib
                                                                         + deprcount]
 
-                    self.__loadfiles([min(nearest), max(nearest) + self.badmpm])
+                    self.__loadfiles([min(nearest), max(nearest) + self.badmpm + 1])
                     # Check if there's deprecated MPM
                     for slices in self.__buffer.values():
                         if slices.MPM_strip == 0 :
@@ -175,7 +178,8 @@ class Model3D:
                         last_depcount = deprcount 
                 
                 # caculate mean mpm for nearest figure
-                slices = [self.__buffer[j].MPM_strip for j in nearest if self.__buffer[j].MPM_strip != 0]
+                slices = [self.__buffer[j].MPM_strip for j in nearest \
+                          if self.__buffer[j].MPM_strip != 0]
                 Sum = [0]*len(slices[0])
                 for Slic in slices:
                     for j in range(len(Slic)): #22
@@ -221,20 +225,37 @@ class Model3D:
         self.__Save01(Savename = savename + '_aftr')
         
     # To avoid inconsistent cube recognition
-    def __CheskMPM(self, i):
-        if self.__buffer[i].MPM_strip == 0:
-            return True
-        elif i > 0:
-            for j, ctr in enumerate(self.__buffer[i].ctrs):
-                if np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2)) > 20:
-                    return True
+    def __CheskMPM(self, i, maxdis = 200,  show = False):
+        for j, ctr in enumerate(self.__buffer[i].ctrs):
+            dis = np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2))
+            if  dis > maxdis:
+                print("\nIn consistent deprecated detected on "+str(i)+" : " \
+                      +str(j)+'distance ='+str(dis))
+                if show:
+                    img1 = cv2.cvtColor(self.__buffer[i-1].region, cv2.COLOR_GRAY2BGR)
+                    img2 = cv2.cvtColor(self.__buffer[i].region, cv2.COLOR_GRAY2BGR)
+                    for count, center in enumerate(self.__buffer[i-1].ctrs):
+                        cv2.putText(img1, str(count), center,
+                                    cv2.FONT_HERSHEY_COMPLEX, 
+                                    2, (0,255,0), 2)
+                    for count, center in enumerate(self.__buffer[i].ctrs):
+                        cv2.putText(img2, str(count), center,
+                                    cv2.FONT_HERSHEY_COMPLEX, 
+                                    2, (0,255,0), 2)
+                    img1 = cv2.resize(img1,(img1.shape[1]>>1, img1.shape[0]>>1))
+                    img2 = cv2.resize(img2,(img2.shape[1]>>1, img2.shape[0]>>1))
+                    cv2.imshow("img"+str(i-1),img1)
+                    cv2.imshow("img"+str(i),img2)
+                    cv2.waitKey()
+                    cv2.destroyAllWindows()
+                return True
         return False
     
     def __Save01(self, Savename):
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
         Slices[self.Slices>0] = 255
         np.save(Savename, Slices)
-        
+    
     def ShowSlice(self, i):
         #cv2.imshow('test', obj.Slices[:,:,0].astype(np.uint8))
         cv2.imshow('test',cv2.resize(self.Slices[:,:,i].astype(np.uint8),(1000,1000)))
@@ -251,10 +272,9 @@ class Model3D:
             if cv2.waitKey(30) & 0xFF == ord('q'):
                 break
         cv2.destroyAllWindows()
-        
-        
+              
     def Model_3D_surface(self):
-        print('Rendering…………')
+        print('Rendering Surface…………')
         pixel_length_cm = 1e-2  # cm
         pixel_depth_cm = 30e-4  # cm
         # Resample the slices to represent the exact length and Create mesh grid
@@ -270,6 +290,7 @@ class Model3D:
     
     # Success plot
     def Model_3D_dots(self, originalPath, aftrPath):
+        print('Rendering dot clouds…………')
         original = np.load(originalPath)
         aftr = np.load(aftrPath)
         x, y, z = np.indices(original.shape)
@@ -338,9 +359,9 @@ if __name__ == '__main__':
         obj = Model3D(openname)
     else:
         obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
-        obj.calibMPM(Range = [0,200],
-                     idxmask = [i for i in range(22)],
-                     savename = model3Dname)
+        obj.build(Range = [0,200],
+                  idxmask = [i for i in range(22)],
+                  savename = model3Dname)
 
     fig = obj.Model_3D_dots(model3Dname+ '_original.npy',
                         model3Dname+ '_aftr.npy')

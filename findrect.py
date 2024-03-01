@@ -18,11 +18,11 @@ class FindRect:
         self._gray = np.zeros((2,2))
         self.erosion = np.zeros((2,2)) 
         self.strip_color = []
+        self._max_black = 10
         
     # show the image in 1/2 size for the screen
     def _imshow(self, img):
-        img = cv2.resize(img,(int(0.5*img.shape[0]), 
-                              (0.5*img.shape[1])),fx=1,fy=1)
+        img = cv2.resize(img,(img.shape[1]>>1, img.shape[0]>>1))
         cv2.imshow("show",img)
         cv2.waitKey()
         cv2.destroyAllWindows()
@@ -85,7 +85,8 @@ class FindRect:
         # need to arrange for this initial order
         # sorting slope = 10 for 110 OT img  , >1 for row sort, < 1 for line sort
         # sorting slope = 0.55 for 27 OT img , slope = 1/math.atan(-findrect.mean_angle)-0.1
-        self._inner_rects = [maximum_internal_rectangle(self.__rotated_img, cnt) for cnt in contours2]
+        self._inner_rects = [maximum_internal_rectangle(self.__rotated_img, cnt,
+                                                        self._max_black) for cnt in contours2]
         self._inner_rects = sorted(self._inner_rects, key = lambda x: x[0]*self.sorting_slope-x[1])
 
         if show:
@@ -180,7 +181,7 @@ class Pointlist:
             
 
 
-def maximum_internal_rectangle(img, cnt, max_black_pixel = 10): 
+def maximum_internal_rectangle(img, cnt, max_black = 50): 
     rect = []
     contour = cnt.reshape(len(cnt),2)
     img = cv2.cvtColor(img,cv2.COLOR_GRAY2BGR)
@@ -215,7 +216,7 @@ def maximum_internal_rectangle(img, cnt, max_black_pixel = 10):
             while x < max(x1, x2) + 1 and valid_rect:
                 if any(img[y1, x]) == 0 or any(img[y2, x]) == 0:
                     black_count += 1
-                    if black_count > max_black_pixel:
+                    if black_count > max_black:
                         valid_rect = False
                 x += 1
  
@@ -224,7 +225,7 @@ def maximum_internal_rectangle(img, cnt, max_black_pixel = 10):
             while y < max(y1, y2) + 1 and valid_rect:
                 if any(img[y, x1]) == 0 or any(img[y, x2]) == 0:
                     black_count += 1
-                    if black_count > max_black_pixel:
+                    if black_count > max_black:
                         valid_rect = False
                 y += 1
  

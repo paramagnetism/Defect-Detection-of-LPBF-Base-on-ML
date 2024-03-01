@@ -13,6 +13,7 @@ class MPM_mean(FindRect):
     # use generated image
     def __init__(self, filename, rectnum):
         super(MPM_mean, self).__init__(filename, rectnum)
+        self._max_black = 50
         if type(filename) == str:     
             self.src = cv2.imread(filename)
             self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
@@ -85,16 +86,20 @@ if __name__ == '__main__':
     # point_list = Pointlist('./28Case/MPM/mpm_x.csv', './28Case/MPM/mpm_y.csv' ,'./28Case/MPM/mpm_'+typ+'.csv', params = 'anticlock')
     # gray = point_list.imshow(show = True)
     # findrect = MPM_mean(gray, rectnum = 27)
-    findrect = MPM_mean('MPM/Vaildation print 31102023_SI246120231031190932_007_200_00.mpm_ma_'+typ+'axis.tif', rectnum = 22)
-    # hist, hist2 = findrect.hist()
-    findrect.FullProcess()
+    findrect = MPM_mean('E:\MPMTIFF/Vaildation print 31102023_SI246120231031190932_001_320_00.mpm_ma_'+typ+'axis.tif', rectnum = 22)
+    findrect.divpart = 1
+    findrect.threshold(3)
+    findrect.morphoperation(15)
+    findrect.get_rotate(show = True)
+    findrect.find_inner_rects(show = True)
+    # findrect.FullProcess()
     
     #findrect.cal_mean(point_list, show = True)
     findrect.cal_mean([], show = True) # 5 / 1
     
     findrect.matching_strip()
     
-    xls = XLS(loadname = "./OT/validation data V3.xlsx", loadpage = "Results")
+    #   xls = XLS(loadname = "./OT/validation data V3.xlsx", loadpage = "Results")
     #xls = XLS(loadname = "./28Case/28_result.xlsx", loadpage = "Sheet1")
     #xls.save("./28Case/MPM/result-"+typ+".xlsx", findrect.strip_color)
-    xls.save("./MPM/Imgresult-"+typ+".xlsx", findrect.strip_color)
+    #   xls.save("./MPM/Imgresult-"+typ+".xlsx", findrect.strip_color)
