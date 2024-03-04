@@ -58,13 +58,15 @@ class AutoTrain:
         self.rst = [[] for i in range (6)]
         self.power = []
         for i in range(batchnum):
-            if test_size == 0:
+            if batchnum == 1:
                 X_train, X_test, y_train, y_test = self.X, self.X, self.y, self.y
             else:
                 X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=i)
-            param_grid = {'polynomialfeatures__degree': np.arange(1, 5)}
+            # fittin polynomial's indexs
+            param_grid = {'polynomialfeatures__degree': np.arange(1, 4)}
             model = make_pipeline(PolynomialFeatures(), LinearRegression())
-            grid = GridSearchCV(model, param_grid, n_jobs = -1, cv=5)
+            grid = GridSearchCV(model, param_grid, n_jobs = -1, cv = 5)
+            # print(X_train, y_train)
             grid.fit(X_train, y_train)
             y_pred = grid.predict(X_test)
             linear = grid.best_estimator_.named_steps['linearregression']
@@ -104,15 +106,18 @@ class AutoTrain:
     
     def __getCombinations(self, ids):
         combinations = []
-        bits = len(ids)
-        for i in range(2**bits-1):
-            label = bin(i+1).rjust(bits,'0')[-bits:]
+        bits = len(ids) # 6
+        # Use bin to generate labels
+        for i in range(2**bits):
+            label = bin(i).rjust(bits,'0')[-bits:]
             tag = []
             for j, ltr in enumerate(label):
                 if ltr == '1':
                     tag.append(ids[j])
             combinations.append(tag)
-        return [comb + [7,8] for comb in combinations]
+        power = self.Labels.index('Laser Power (W)')
+        speed = self.Labels.index('Scanning Speed (mm/s)')
+        return [comb + [power, speed] for comb in combinations]
     
     
     def combineFit(self, labelid, batchnum):

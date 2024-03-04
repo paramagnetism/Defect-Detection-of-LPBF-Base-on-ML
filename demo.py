@@ -5,6 +5,9 @@ Created on Mon Feb 19 18:25:58 2024
 @author: Admin
 """
 from poly_regress import *
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
 import os
 import pickle
 
@@ -41,19 +44,22 @@ y = model.predict(X)
 '''
 
 
-'''
+
 # Totally unrelated
 Labels = ['OT_Int (0-255)',         # 0
           'OT_Max (0-255)',         # 1
           'Calib_on',               # 2
-          'Laser Power (W)',        # 3
-          'Scanning Speed (mm/s)']  # 4
+          'Calib_on',               # 3
+          'Laser Power (W)',        # 4
+          'Scanning Speed (mm/s)']  # 5
 output = ['D_mean (µm)']
 trainner = AutoTrain('E:/27 OT/MEAN.csv', Labels, output, outputid = 0)
-labelid = [0, 2, 3, 4]
+labelid = [4, 5]
 X = np.array(trainner.data[[trainner.Labels[i] for i in labelid]])
 Y = trainner.y
+
+model = LinearRegression().fit(X, Y)
 y = model.predict(X)
+
 from sklearn.metrics import r2_score
 r2 = r2_score(Y, y)
-'''
