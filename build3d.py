@@ -232,7 +232,7 @@ class Model3D:
         self.__Save01(Savename = savename + '_aftr')
         
     # To avoid inconsistent cube recognition
-    def __CheskMPM(self, i, maxdis = 200,  show = False):
+    def __CheskMPM(self, i, maxdis = 100,  show = False):
         for j, ctr in enumerate(self.__buffer[i].ctrs):
             dis = np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2))
             if dis > maxdis:

@@ -4,10 +4,23 @@ Created on Mon Feb 19 18:25:58 2024
 
 @author: Admin
 """
-from build3d import ReadModels
 from poly_regress import *
+import os
+import pickle
+
+def ReadModels(dirct = 'models/'):
+    models = []
+    for root, dirs, files in os.walk(dirct):
+        filenames = [os.path.join(root, filename) for filename in files]
+        filenames.sort(key = lambda x: -len(x))
+    for filename in filenames:
+        with open(filename,"rb") as f:
+            loaded = pickle.load(f)
+        models.append(loaded)
+    return models
 
 model = ReadModels()[0]['model']
+'''
 Labels = ['OT_Int (0-255)',         # 0
           'OT_Max (0-255)',         # 1
           'MPM_on (0-255)',         # 2
@@ -21,6 +34,26 @@ labelid = [0, 5, 7, 8]
 output = ['D_mean (µm)', 'W_mean (µm)']
 trainner = AutoTrain('RESULT.csv', Labels, output, outputid = 0)
 X = np.array(trainner.data[[trainner.Labels[i] for i in labelid]])
+trainner = AutoTrain('RESULT.csv', Labels, output, outputid = 0)
+X = np.array(trainner.data[[trainner.Labels[i] for i in labelid]])
 Y = trainner.y
 y = model.predict(X)
-models = ReadModels()[0]
+'''
+
+
+'''
+# Totally unrelated
+Labels = ['OT_Int (0-255)',         # 0
+          'OT_Max (0-255)',         # 1
+          'Calib_on',               # 2
+          'Laser Power (W)',        # 3
+          'Scanning Speed (mm/s)']  # 4
+output = ['D_mean (µm)']
+trainner = AutoTrain('E:/27 OT/MEAN.csv', Labels, output, outputid = 0)
+labelid = [0, 2, 3, 4]
+X = np.array(trainner.data[[trainner.Labels[i] for i in labelid]])
+Y = trainner.y
+y = model.predict(X)
+from sklearn.metrics import r2_score
+r2 = r2_score(Y, y)
+'''

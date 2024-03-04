@@ -56,13 +56,17 @@ class OT_mean(FindRect):
 
 if __name__ == '__main__':
     #findrect = OT_mean('./OT/OT/SI246120231031190932_239_007_200_Max_32F.tif', 27)
-    findrect = OT_mean('./28Case/OT/SI246120230518190639_184_005_550_Max_32F.tif', 27)
+    findrect = OT_mean('E:/27 OT/Max/SI246120230518190639_0_000_030_Max_32F.tif', 27)
     #hist, hist2 = findrect.hist()
-    findrect.FullProcess()
-    findrect.cal_mean(show = False) 
+    # findrect.FullProcess()
+    findrect.threshold(1, show = True)
+    findrect.morphoperation(15, show = True)
+    findrect.get_rotate()
+    findrect.find_inner_rects()
+    findrect.cal_mean(show = True) 
     findrect.matching_strip()
     # write in 
     #xls = XLS(loadname = "./OT/validation data V3.xlsx", loadpage = "Results")
-    xls = XLS(loadname = "./28Case/28_result.xlsx", loadpage = "Sheet1")
-    xls.save("./28Case/OT/OT_Max.xlsx", findrect.strip_color)
+    #xls = XLS(loadname = "./28Case/28_result.xlsx", loadpage = "Sheet1")
+    #xls.save("./28Case/OT/OT_Max.xlsx", findrect.strip_color)
     #xls.save("./28Case/28RESULTT.xlsx",findrect.strip_color)
