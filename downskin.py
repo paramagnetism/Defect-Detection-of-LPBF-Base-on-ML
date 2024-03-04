@@ -43,8 +43,6 @@ Y = trainner.y
 y = model.predict(X)
 '''
 
-
-
 # Totally unrelated
 Labels = ['OT_Int (0-255)',         # 0
           'OT_Max (0-255)',         # 1
