@@ -61,3 +61,6 @@ y = model.predict(X)
 
 from sklearn.metrics import r2_score
 r2 = r2_score(Y, y)
+
+with open('models/Dskin.pkl',"wb") as f:
+    pickle.dump(model, f)

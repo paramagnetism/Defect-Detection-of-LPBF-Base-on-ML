@@ -9,8 +9,6 @@ import cv2
 import pickle
 import numpy as np
 from mayavi import mlab
-import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
 
 # local lib
@@ -19,7 +17,13 @@ from MPM_mean import MPM_mean
 from findrect import Pointlist
 
 class Model3D:
-    def __init__(self, roots, Calib = 6, Param = 'IntOn', badmpm = 2):
+    def __init__(self, roots, 
+                 Calib = 6, 
+                 Param = 'IntOn', 
+                 badmpm = 2,
+                 # Laser Power, Scanning Speed = 370, 1300 as default
+                 Settings = [370, 1300]):
+        
         self.__calib = Calib
         if 'Int' in Param:
             self.__OT_type = 'Int'
@@ -36,6 +40,7 @@ class Model3D:
         
         # OT is in 2 Directories
         if type(roots) == str and os.path.exists(roots):
+            # If exist, load the Slices directly
             self.Slices = np.load(roots)
         else:
             self.OT_root = os.path.join(roots[0], self.__OT_type.upper())
@@ -44,21 +49,28 @@ class Model3D:
             # RAM slices
             self.__buffer = {}
             self.badmpm = badmpm
-            self._ReadModels(dirct = 'models/')
             # Use MPM + OT model as default, OT only when MPM deprecated
+            self._Settings = Settings
+            self._ReadModels(dirct = 'models/')
             
             
     def _ReadModels(self, dirct = 'models/'):
         models = []
         for root, dirs, files in os.walk(dirct):
             filenames = [os.path.join(root, filename) for filename in files]
+            
+            # Sorted models by length of filenames
             filenames.sort(key = lambda x: -len(x))
+            
         for filename in filenames:
             with open(filename,"rb") as f:
                 loaded = pickle.load(f)
             models.append(loaded)
+            # print(type(loaded))
         self.model = models[0]['model']
         self.OTmodel = models[1]['model']
+        self.Downskin = models[3].predict(np.array([self._Settings]))[0]
+        print("Applied all downskin depth: "+str(self.Downskin))
 
 
     class _Slice:
@@ -67,8 +79,7 @@ class Model3D:
             OT.divpart = 1
             OT.FullProcess()
             OT.cal_mean(show = False) 
-            OT.matching_strip()
-            self.OT_strip = OT.strip_color
+            self.OT_strip = OT.mean
             
             # if tiff image
             if MPM_root[-4:] == '.tif':
@@ -92,7 +103,7 @@ class Model3D:
                     MPM.FullProcess()
                     MPM.cal_mean(point_list, show = False)
                     
-            try:  # if the MPM figure is corrupted
+            try:  # if the MPM figure is corrupted, not enough region detected
                 if useOT:
                     raise IndexError('In consistent deprecated detected')
                 MPM.matching_strip()
@@ -106,7 +117,7 @@ class Model3D:
                 # self.region = np.zeros((2500,2500))
                 
             else:
-                self.MPM_strip = MPM.strip_color
+                self.MPM_strip = MPM.mean
                 self.region = MPM.erosion.astype(np.float32)
                 self.ctrs = MPM.ctrs
     
@@ -160,11 +171,10 @@ class Model3D:
             depth = []
             # Check if MPM image is corrupted
             if self.__buffer[i].MPM_strip == 0 or \
-                (i > start_idx and self.__CheskMPM(i, maxdis = 100, show = True)):
+                (i > start_idx and self.__CheskMPM(i, maxdis = 100)):
                 self.deprecated_mpm.append(i)
-                for j, otstrip in enumerate(self.__buffer[i].OT_strip):
-                    OTmean = otstrip['OT_mean']
-                    depth.append(self.OTmodel.predict(np.array([[OTmean, 370, 1300]])))
+                for otstrip in self.__buffer[i].OT_strip:
+                    depth.append(self.OTmodel.predict(np.array([[otstrip, 370, 1300]])))
             else:  # calculate the depth
                 last_depcount = 0
                 while True:
@@ -174,7 +184,8 @@ class Model3D:
                                                                         + deprcount]
 
                     self.__loadfiles([min(nearest), max(nearest) + self.badmpm + 1])
-                    # Check if there's deprecated MPM
+                    
+                    # Check if there's deprecated MPM in range
                     for slices in self.__buffer.values():
                         if slices.MPM_strip == 0 :
                             deprcount += 1
@@ -187,18 +198,13 @@ class Model3D:
                 # caculate mean mpm for nearest figure
                 slices = [self.__buffer[j].MPM_strip for j in nearest \
                           if self.__buffer[j].MPM_strip != 0]
-                Sum = [0]*len(slices[0])
-                for Slic in slices:
-                    for j in range(len(Slic)): #22
-                        Sum[j]+=Slic[j]['MPM_mean']
-                Std = [j/len(slices) for j in Sum]
-
+                Std = np.mean(np.array(slices), axis = 0)
+                
                 # normalize mpm and predict depth
                 for j, mpmstrip in enumerate(self.__buffer[i].MPM_strip):
-                    OTmean = self.__buffer[i].OT_strip[j]['OT_mean']
-                    calib = mpmstrip['MPM_mean']/Std[j]/1300*10000
-                    depth.append(self.model.predict(np.array([[OTmean, calib, 370, 1300]])))
-            
+                    OTmean = self.__buffer[i].OT_strip[j]
+                    calib = mpmstrip/Std[j]/self._Settings[1]*10000
+                    depth.append(self.model.predict(np.array([[OTmean, calib] + self._Settings])))
             self.depths.append(depth)
             
             # paint the depth on map
@@ -211,6 +217,9 @@ class Model3D:
             # remove noise from floodfill and unfilled region
             self.__buffer[i].region[self.__buffer[i].region > max(depth)+1] = 0
             self.__buffer[i].region[self.__buffer[i].region < min(depth)-1] = 0
+            
+            # Unfilled aera will remain 255 and then got removed
+            self.__buffer[i].region[self.__buffer[i].region == 255] = 0
             self.Slices.append(self.__buffer[i].region)
         
         # Transpose for 3D drawing
@@ -220,16 +229,21 @@ class Model3D:
         for i in self.deprecated_mpm:
             idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
             self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
-        # np.save(savename + '_original', self.Slices)  # Too large to save
+            
+        # Too large to save painted ones, save unpainted ones instead
         self.__Save01(Savename = savename + '_original')
         np.save(savename + '_depths', np.array(self.depths))
-        
+    
+    def updateDepth(self, savename, Downskin = True):
         # update depth
+        if Downskin:
+            self.Slices[self.Slices > 0] += self.Downskin
+        
         for i in range(self.Slices.shape[2]-1):
             upper = self.Slices[:,:,-i-1]-30
             self.Slices[:,:,-i-2] = np.maximum(self.Slices[:,:,-i-2], upper)
         # np.save(savename + '_aftr', self.Slices)
-        self.__Save01(Savename = savename + '_aftr')
+        self.__Save01(Savename = savename + '_after')
         
     # To avoid inconsistent cube recognition
     def __CheskMPM(self, i, maxdis = 100,  show = False):
@@ -238,7 +252,6 @@ class Model3D:
             if dis > maxdis:
                 print("\nIn consistent deprecated detected on "+str(i)+" : " \
                       +str(j)+'distance ='+str(dis))
-                    
                 if show:
                     img1 = cv2.cvtColor(self.__buffer[i-1].region, cv2.COLOR_GRAY2BGR)
                     img2 = cv2.cvtColor(self.__buffer[i].region, cv2.COLOR_GRAY2BGR)
@@ -259,7 +272,8 @@ class Model3D:
                     
                 OT_name, MPM_name = self._idx2name(i)
                 # Replace the corrupted with OT
-                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type, useOT = True)})
+                self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
+                                                    self.__MPM_type, useOT = True)})
                 return True
         return False
     
@@ -301,10 +315,9 @@ class Model3D:
         return src, vol
     
     # Success plot
-    def Model_3D_dots(self, originalPath, aftrPath):
+    def Model_3D_dots(self, originalPath):
         print('Rendering dot clouds…………')
         original = np.load(originalPath)
-        aftr = np.load(aftrPath)
         x, y, z = np.indices(original.shape)
         
         x_real = x * 0.01
@@ -315,7 +328,7 @@ class Model3D:
         np.random.shuffle(indices_original)
         indices_original = indices_original[:50000]
         
-        indices_aftr_only = np.argwhere(aftr > original)
+        indices_aftr_only = np.argwhere(self.Slices > original)
         np.random.shuffle(indices_aftr_only)
         indices_aftr_only = indices_aftr_only[:10000]
         
@@ -332,41 +345,11 @@ class Model3D:
 
         mlab.show()
         return fig
-        
-    # This function is a faliure    
-    def Model_2D(self, loadname):
-        print('Rendering…………')
-        
-        original = np.load(loadname + '_original.npy')
-        aftr = np.load(loadname + '_aftr.npy')
-        # Filter aftr where original is 0
-        # diff = np.where(original == 0, aftr, 0)
-        x_scale = y_scale = 0.04
-        z_scale = 0.003
-        # Plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        # indices = np.nonzero(diff)
-        
-        # Plot non-zero points
-        for i in tqdm(range(aftr.shape[0]>>2)):
-            for j in range(aftr.shape[1]>>2):
-                for k in range(aftr.shape[2]):
-                    if original[i<<2, j<<2, k] < aftr[i<<2, j<<2, k]:
-                        ax.scatter(i * x_scale, j * y_scale, k * z_scale, color='red', alpha = 1)
-                    elif original[i, j, k] > 0:
-                        ax.scatter(i * x_scale, j * y_scale, k * z_scale, color='gray', alpha = 1)
-                
-        ax.set_xlabel('X (cm)')
-        ax.set_ylabel('Y (cm)')
-        ax.set_zlabel('Z (cm)')
-        
-        plt.title('Region Representation in 3D')
-        plt.show()
+
     
 if __name__ == '__main__':
     model3Dname = 'Files/demo'
-    openname = model3Dname + '_original.npy'
+    openname = model3Dname + '_after.npy'
     if os.path.exists(openname):
         obj = Model3D(openname)
     else:
@@ -374,9 +357,9 @@ if __name__ == '__main__':
         obj.build(Range = [0,200],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
-
-    fig = obj.Model_3D_dots(model3Dname+ '_original.npy',
-                        model3Dname+ '_aftr.npy')
+        obj.updateDepth(savename = model3Dname)
+        
+    fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
     # obj.ShowSlice(162)
     # obj.ShowVideo()
