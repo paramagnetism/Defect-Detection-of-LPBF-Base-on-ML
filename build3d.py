@@ -222,6 +222,9 @@ class Model3D:
             self.__buffer[i].region[self.__buffer[i].region == 255] = 0
             self.Slices.append(self.__buffer[i].region)
         
+        # Release the buffer
+        self.buffer = {}
+        
         # Transpose for 3D drawing
         self.Slices = np.transpose(np.array(self.Slices),(1,2,0))
         
@@ -233,6 +236,7 @@ class Model3D:
         # Too large to save painted ones, save unpainted ones instead
         self.__Save01(Savename = savename + '_original')
         np.save(savename + '_depths', np.array(self.depths))
+        
     
     def updateDepth(self, savename, Downskin = True):
         # update depth
@@ -283,6 +287,14 @@ class Model3D:
         np.save(Savename, Slices)
     
     def ShowSlice(self, i):
+        '''
+        
+        Show the image of Slice index for check
+        --------
+        Parameters:
+            i (int): The index of layer.
+        
+        '''
         #cv2.imshow('test', obj.Slices[:,:,0].astype(np.uint8))
         cv2.imshow('test',cv2.resize(self.Slices[:,:,i].astype(np.uint8),(1000,1000)))
         cv2.waitKey(0)
@@ -300,6 +312,15 @@ class Model3D:
         cv2.destroyAllWindows()
               
     def Model_3D_surface(self):
+        '''
+
+        Returns
+        -------
+            
+        # src, vol = obj.Model_3D_surface()
+        # mlab.show()
+
+        '''
         print('Rendering Surface…………')
         pixel_length_cm = 1e-2  # cm
         pixel_depth_cm = 30e-4  # cm
@@ -345,7 +366,60 @@ class Model3D:
 
         mlab.show()
         return fig
-
+    
+    def CutSlice(self, start, end):
+        """
+        Cut a slice from the 3D matrix vertically based on start and end points.
+        
+        Parameters:
+            matrix (ndarray): The 3D NumPy matrix.
+            start_point (tuple): The starting point (x, y) of the slice on every layer.
+            end_point (tuple): The ending point (x, y) of the slice on every layer.
+            
+        Returns:
+            ndarray: The sliced matrix.
+        """
+        # Extracting start and end points
+        if sum(start) < sum(end):
+            x1, y1 = start
+            x2, y2 = end
+        else:
+            x1, y1 = end
+            x2, y2 = start
+            
+        MaX, MaY = self.Slices.shape[0], self.Slices.shape[1]
+        assert 0 <= x1 and x1 <= MaX-1
+        assert 0 <= x2 and x2 <= MaX-1
+        assert 0 <= y1 and y1 <= MaY-1
+        assert 0 <= y2 and y2 <= MaY-1
+        
+        # Check the slope
+        if x1 == x2: return self.Slices[x1,:,:]
+        if y1 == y2: return self.Slices[:,y1,:]
+        
+        k = (y1-y2)/(x1-x2)
+        b = y2 - k*x2
+        intersections = [(0, b),
+                         (MaX, MaX*k + b),
+                         (-b/k, 0),
+                         ((MaY-b)/k, MaY)
+                         ]
+        Intrsct = [pt for pt in intersections if pt[0] <= MaX and \
+                    pt[0]>= 0 and pt[1] <= MaY and pt[1]>= 0]
+        assert len(Intrsct) == 2
+        # Draw start from the smaller X value
+        begin, stop = min(Intrsct), max(Intrsct)
+        Dx, Dy = stop[0]-begin[0], stop[1]-begin[1]
+        dis = (Dx**2 + Dy**2)**0.5
+        dx, dy = Dx/dis, Dy/dis
+        #print(dx, dy)
+        points = [(round(begin[0]+d*dx), round(begin[1]+d*dy))  for d in range(round(dis))]
+        Slice = np.flipud(np.array([self.Slices[pts[1], pts[0], :] for pts in points]).T)
+        print(Slice.shape)
+        Real = cv2.resize(Slice, (Slice.shape[1], round(Slice.shape[0]*0.3)))
+        cv2.imwrite('Files/slice.png', Real)
+        return Real
+        
     
 if __name__ == '__main__':
     model3Dname = 'Files/demo'
@@ -358,11 +432,8 @@ if __name__ == '__main__':
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         obj.updateDepth(savename = model3Dname)
-        
-    fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
+    Slice = obj.CutSlice((354,1330), (1947,910))
+    # fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
-    # obj.ShowSlice(162)
-    # obj.ShowVideo()
     
-    # src, vol = obj.Model_3D_surface()
-    # mlab.show()
+    
