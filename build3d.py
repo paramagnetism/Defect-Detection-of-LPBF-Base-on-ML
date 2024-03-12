@@ -52,6 +52,9 @@ class Model3D:
             # Use MPM + OT model as default, OT only when MPM deprecated
             self._Settings = Settings
             self._ReadModels(dirct = 'models/')
+        
+        # Read the first slice to get the index
+            self.__loadfiles([0,1])
             
             
     def _ReadModels(self, dirct = 'models/'):
@@ -72,19 +75,15 @@ class Model3D:
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
 
-
     class _Slice:
-        def __init__(self, OT_picname, MPM_root, mode, rectnum = 22, useOT = False):
+        def __init__(self, OT_picname, MPM_root, mode, rectnum):
             OT = OT_mean(OT_picname, rectnum = rectnum)
-            OT.divpart = 1
-            OT.FullProcess()
-            OT.cal_mean(show = False) 
-            self.OT_strip = OT.mean
+            OT.sorting_slope = 10
             
             # if tiff image
             if MPM_root[-4:] == '.tif':
                 MPM = MPM_mean(MPM_root, rectnum = rectnum)
-                MPM.divpart = 1
+                MPM.sorting_slope = 10
                 MPM.FullProcess()
                 MPM.cal_mean([], show = False) # 5 / 1
             
@@ -102,24 +101,26 @@ class Model3D:
                     MPM = MPM_mean(gray, rectnum = rectnum)
                     MPM.FullProcess()
                     MPM.cal_mean(point_list, show = False)
-                    
-            try:  # if the MPM figure is corrupted, not enough region detected
-                if useOT:
-                    raise IndexError('In consistent deprecated detected')
-                MPM.matching_strip()
-                
-            except IndexError:
+            
+            if len(MPM.mean) != rectnum:
                 print('\n'+MPM_root+' deprecated, use OT instead')
                 self.MPM_strip = 0
-                # need to resize the OT image to MPM scale
-                self.region = cv2.resize(OT.erosion, (2500,2500)).astype(np.float32)
+                # Caculate only with OT
+                OT.FullProcess()
+                OT.cal_mean()
+                self.region = OT.erosion.astype(np.float32)
                 self.ctrs = OT.ctrs
-                # self.region = np.zeros((2500,2500))
-                
+                self.contours = OT.contours # Need discussion for merged situation
+            # Calculate OT + MPM
             else:
+                OT.erosion = MPM.erosion
+                OT.get_rotate()
+                OT.find_inner_rects()
+                self.OT_strip = OT.mean
                 self.MPM_strip = MPM.mean
                 self.region = MPM.erosion.astype(np.float32)
                 self.ctrs = MPM.ctrs
+                self.contours = MPM.contours
     
     def _idx2name(self, i):
         # Can change MPM to pic
@@ -147,7 +148,7 @@ class Model3D:
         for i in range(start_idx, end_idx):
             if i not in self.__buffer.keys():
                 OT_name, MPM_name = self._idx2name(i)
-                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type)})
+                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type, 46)})
                 # print('read index'+str(i))
                 
         # delete keys if unused        
@@ -158,6 +159,17 @@ class Model3D:
                 # print('delete index'+str(key))
                 
     def build(self, Range, idxmask, savename = 'Files/demo'):
+        '''
+        Build slices from images
+        --------
+        Parameters:
+            Range: (int) The 3D NumPy matrix.
+            start_point (tuple): The starting point (x, y) of the slice on every layer.
+            end_point (tuple): The ending point (x, y) of the slice on every layer.
+            
+        Returns:
+            ndarray: The sliced matrix.
+        '''
         [start_idx, end_idx] = Range
         # Calib MPM
         print('Reading data')
@@ -250,6 +262,7 @@ class Model3D:
         self.__Save01(Savename = savename + '_after')
         
     # To avoid inconsistent cube recognition
+    '''
     def __CheskMPM(self, i, maxdis = 100,  show = False):
         for j, ctr in enumerate(self.__buffer[i].ctrs):
             dis = np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2))
@@ -277,9 +290,11 @@ class Model3D:
                 OT_name, MPM_name = self._idx2name(i)
                 # Replace the corrupted with OT
                 self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
-                                                    self.__MPM_type, useOT = True)})
+                                                    self.__MPM_type, 46, 
+                                                    useOT = True)})
                 return True
         return False
+    '''
     
     def __Save01(self, Savename):
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
@@ -367,7 +382,7 @@ class Model3D:
         mlab.show()
         return fig
     
-    def CutSlice(self, start, end):
+    def CutSlice(self, start, end, originalPath):
         """
         Cut a slice from the 3D matrix vertically based on start and end points.
         
@@ -379,6 +394,7 @@ class Model3D:
         Returns:
             ndarray: The sliced matrix.
         """
+        original = np.load(originalPath)
         # Extracting start and end points
         if sum(start) < sum(end):
             x1, y1 = start
@@ -415,9 +431,12 @@ class Model3D:
         #print(dx, dy)
         points = [(round(begin[0]+d*dx), round(begin[1]+d*dy))  for d in range(round(dis))]
         Slice = np.flipud(np.array([self.Slices[pts[1], pts[0], :] for pts in points]).T)
-        print(Slice.shape)
+        origin = np.flipud(np.array([original[pts[1], pts[0], :] for pts in points]).T)
         Real = cv2.resize(Slice, (Slice.shape[1], round(Slice.shape[0]*0.3)))
-        cv2.imwrite('Files/slice.png', Real)
+        real = cv2.resize(origin, (origin.shape[1], round(origin.shape[0]*0.3)))
+        color = cv2.cvtColor(Real,cv2.COLOR_GRAY2BGR)
+        color[Real>real]=(0,255,0)
+        cv2.imwrite('Files/slice.png', color)
         return Real
         
     
@@ -432,8 +451,6 @@ if __name__ == '__main__':
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         obj.updateDepth(savename = model3Dname)
-    Slice = obj.CutSlice((354,1330), (1947,910))
-    # fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
-    
-    
+    Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
+    #fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     

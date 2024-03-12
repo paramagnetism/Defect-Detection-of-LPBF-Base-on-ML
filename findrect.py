@@ -45,10 +45,10 @@ class FindRect:
     # close operation removing noise
     # the kernel should be bigger with larger threshold
     def morphoperation(self, close_kernel_size, show = False): 
-        close_kernel_size = 2 if self.__type__ == 'MPM_mean' else 15
+        close_kernel_size = 15 if self.__type__ == 'OT_mean' else 2
         kernel = np.ones((close_kernel_size, close_kernel_size), dtype=np.uint8)
         self.erosion = cv2.morphologyEx(self.erosion, cv2.MORPH_CLOSE, kernel = kernel)
-        if self.__type__ == 'OT_mean' and self.rectnum == 27:
+        if self.__type__ == 'OT_mean':
             self.erosion = cv2.erode(self.erosion, (3, 3), iterations = 3)
             
         if show:
@@ -57,15 +57,15 @@ class FindRect:
     
     # Sort the founded rectangles and find biggest sizes
     def get_rotate(self, show = False):
-        contours, _ = cv2.findContours(self.erosion, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        contours = sorted(contours, key = lambda x : x.size, reverse = True)[:self.rectnum]
+        self.contours, _ = cv2.findContours(self.erosion, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        self.contours = sorted(self.contours, key = lambda x : x.size, reverse = True)[:self.rectnum]
         if show:
             showcase = self.src.copy()
-            cv2.drawContours(showcase, contours, -1, (0,255,0), 1)
+            cv2.drawContours(showcase, self._contours, -1, (0,255,0), 1)
             self._imshow(showcase)
     
         # Find mean rotation angle for all fitted rotate rect
-        Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in contours]).mean()
+        Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in self._contours]).mean()
         # Get Shift and rotate transform matrix M, and inverse M_
         # Scale little a bit to accomend to shifted image
         self._M = cv2.getRotationMatrix2D([self.src.shape[1]/2, 
@@ -130,6 +130,10 @@ class FindRect:
             
         # return self.strip_color
         
+    def MatchStrip(self):
+        pass
+    
+    
     def FullProcess(self, threshold = 3, close = 15):
         self.threshold(threshold)
         self.morphoperation(close)

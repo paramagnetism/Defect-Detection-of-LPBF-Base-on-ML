@@ -14,6 +14,8 @@ class OT_mean(FindRect):
     def __init__(self, filename, rectnum):
         super(OT_mean, self).__init__(filename, rectnum)
         self.src = cv2.imread(filename)
+        # resize to shape of MPM
+        self.src = cv2.resize(self.src,(2500,2500,3))
         self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
         self.__type__ = 'OT_mean'
     
@@ -48,7 +50,7 @@ class OT_mean(FindRect):
                 self.mean.append(cv2.mean(self._gray, mask)[0])
                 
                 # The OT centers should be in 2500 scale
-                self.ctrs.append(((pts[0]+pts[2])*0.625).astype(np.int32))
+                self.ctrs.append(((pts[0]+pts[2])/2).astype(np.int32))
                 
         if show:
             self._imshow(self.src)
