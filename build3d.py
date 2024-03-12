@@ -23,8 +23,8 @@ class Model3D:
                  badmpm = 2,
                  # Laser Power, Scanning Speed = 370, 1300 as default
                  Settings = [370, 1300]):
-        
         self.__calib = Calib
+        self.expected_rect = [46]*200
         if 'Int' in Param:
             self.__OT_type = 'Int'
         elif 'Max' in Param:
@@ -37,7 +37,7 @@ class Model3D:
             self.__MPM_type = 0
         else:
             self.__MPM_type = ''
-        
+            
         # OT is in 2 Directories
         if type(roots) == str and os.path.exists(roots):
             # If exist, load the Slices directly
@@ -74,6 +74,7 @@ class Model3D:
         self.OTmodel = models[1]['model']
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
+
 
     class _Slice:
         def __init__(self, OT_picname, MPM_root, mode, rectnum):
@@ -148,9 +149,9 @@ class Model3D:
         for i in range(start_idx, end_idx):
             if i not in self.__buffer.keys():
                 OT_name, MPM_name = self._idx2name(i)
-                self.__buffer.update({i:self._Slice(OT_name, MPM_name, self.__MPM_type, 46)})
-                # print('read index'+str(i))
-                
+                self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
+                                                    self.__MPM_type, 
+                                                    self.expected_rect[i])})    
         # delete keys if unused        
         for key in list(self.__buffer.keys()):
             # remain some for deprecated 
@@ -181,12 +182,15 @@ class Model3D:
         self.depths = []
         for i in tqdm(indexs):  # for all mpm mean
             depth = []
-            # Check if MPM image is corrupted
-            if self.__buffer[i].MPM_strip == 0 or \
-                (i > start_idx and self.__CheskMPM(i, maxdis = 100)):
+            '''
+            Check if MPM image is corrupted, if use function place below:
+                i should be larger than start index
+            '''
+            if self.__buffer[i].MPM_strip == 0:
                 self.deprecated_mpm.append(i)
                 for otstrip in self.__buffer[i].OT_strip:
-                    depth.append(self.OTmodel.predict(np.array([[otstrip, 370, 1300]])))
+                    depth.append(self.OTmodel.predict(
+                        np.array([otstrip]+self._Settings)))
             else:  # calculate the depth
                 last_depcount = 0
                 while True:
@@ -249,7 +253,6 @@ class Model3D:
         self.__Save01(Savename = savename + '_original')
         np.save(savename + '_depths', np.array(self.depths))
         
-    
     def updateDepth(self, savename, Downskin = True):
         # update depth
         if Downskin:
