@@ -23,8 +23,11 @@ class Model3D:
                  badmpm = 2,
                  # Laser Power, Scanning Speed = 370, 1300 as default
                  Settings = [370, 1300]):
-        self.__calib = Calib
+        # Calibrated number should be larger than 5 
+        self.__calib = max(5, Calib)
+        # Need to adjuct
         self.expected_rect = [46]*200
+        
         if 'Int' in Param:
             self.__OT_type = 'Int'
         elif 'Max' in Param:
@@ -75,12 +78,11 @@ class Model3D:
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
 
-
     class _Slice:
         def __init__(self, OT_picname, MPM_root, mode, rectnum):
             OT = OT_mean(OT_picname, rectnum = rectnum)
             OT.sorting_slope = 10
-            
+            self.rectnum = rectnum
             # if tiff image
             if MPM_root[-4:] == '.tif':
                 MPM = MPM_mean(MPM_root, rectnum = rectnum)
@@ -102,27 +104,50 @@ class Model3D:
                     MPM = MPM_mean(gray, rectnum = rectnum)
                     MPM.FullProcess()
                     MPM.cal_mean(point_list, show = False)
+                    
+            self.region = MPM.erosion.astype(np.float32)
             
-            if len(MPM.mean) != rectnum:
-                print('\n'+MPM_root+' deprecated, use OT instead')
-                self.MPM_strip = 0
-                # Caculate only with OT
-                OT.FullProcess()
-                OT.cal_mean()
-                self.region = OT.erosion.astype(np.float32)
-                self.ctrs = OT.ctrs
-                self.contours = OT.contours # Need discussion for merged situation
             # Calculate OT + MPM
-            else:
+            if len(MPM.mean) == rectnum:
                 OT.erosion = MPM.erosion
                 OT.get_rotate()
                 OT.find_inner_rects()
+                OT.cal_mean()
                 self.OT_strip = OT.mean
                 self.MPM_strip = MPM.mean
-                self.region = MPM.erosion.astype(np.float32)
                 self.ctrs = MPM.ctrs
                 self.contours = MPM.contours
-    
+                
+            else:
+                print('\n'+MPM_root+' deprecated, use OT instead')
+                self.MPM_strip = 0
+                # Caculate only with OT
+                self.OT = OT
+                self.OT.threshold(3)
+                self.OT.morphoperation(15)       
+        
+        def reconstruct(self, slice_1):
+            '''
+            Use 2 Silces before to generate ctrs, contours and region
+
+            Parameters
+            ----------
+            slice_1 : Slice
+                The -1 Slice.
+            '''
+            # Cut the region out for OT to caculate
+            self.region[self.region == 0] = self.OT.erosion[slice_1>0]
+            self.OT.erosion = self.region
+            self.OT.get_rotate()
+            self.OT.find_inner_rects()
+            self.OT.cal_mean()
+            assert len(self.OT.mean) == self.rectnum
+            self.OT_strip = self.OT.mean
+            self.ctrs = self.OT.ctrs
+            self.contours = self.OT.contours
+            self.OT = True
+
+
     def _idx2name(self, i):
         # Can change MPM to pic
         numb = (i + 1) * 3
@@ -151,7 +176,7 @@ class Model3D:
                 OT_name, MPM_name = self._idx2name(i)
                 self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
                                                     self.__MPM_type, 
-                                                    self.expected_rect[i])})    
+                                                    self.expected_rect[i])})
         # delete keys if unused        
         for key in list(self.__buffer.keys()):
             # remain some for deprecated 
@@ -186,19 +211,20 @@ class Model3D:
             Check if MPM image is corrupted, if use function place below:
                 i should be larger than start index
             '''
-            if self.__buffer[i].MPM_strip == 0:
+            if self.__buffer[i].MPM_strip == 0 and i > 0:
                 self.deprecated_mpm.append(i)
+                self.__buffer[i].reconstruct(self.__buffer[i-1])
                 for otstrip in self.__buffer[i].OT_strip:
                     depth.append(self.OTmodel.predict(
                         np.array([otstrip]+self._Settings)))
-            else:  # calculate the depth
+            
+            else:  # Use MPM and OT together to calculate the depth
                 last_depcount = 0
                 while True:
                     deprcount = 0
                     # Load the file
                     nearest = sorted(indexs, key = lambda n: abs(i - n))[:self.__calib
                                                                         + deprcount]
-
                     self.__loadfiles([min(nearest), max(nearest) + self.badmpm + 1])
                     
                     # Check if there's deprecated MPM in range
