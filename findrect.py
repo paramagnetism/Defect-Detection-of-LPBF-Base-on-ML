@@ -128,11 +128,7 @@ class FindRect:
                     self.strip_color.append(rst)
                     count += 1  
             
-        # return self.strip_color
-        
-    def MatchStrip(self):
-        pass
-    
+        # return self.strip_color    
     
     def FullProcess(self, threshold = 3, close = 15):
         self.threshold(threshold)

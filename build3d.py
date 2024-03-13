@@ -55,11 +55,8 @@ class Model3D:
             # Use MPM + OT model as default, OT only when MPM deprecated
             self._Settings = Settings
             self._ReadModels(dirct = 'models/')
-        
-        # Read the first slice to get the index
-            self.__loadfiles([0,1])
-            
-            
+    
+      
     def _ReadModels(self, dirct = 'models/'):
         models = []
         for root, dirs, files in os.walk(dirct):
@@ -77,7 +74,8 @@ class Model3D:
         self.OTmodel = models[1]['model']
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
-
+        
+    
     class _Slice:
         def __init__(self, OT_picname, MPM_root, mode, rectnum):
             OT = OT_mean(OT_picname, rectnum = rectnum)
@@ -184,6 +182,17 @@ class Model3D:
                 del self.__buffer[key]
                 # print('delete index'+str(key))
                 
+    def __initLayer(self, buildRange):
+        '''
+        Match for expected rectangle numbers
+        ------
+        Parameters:
+            buildRange: (range) The 3D NumPy matrix.
+        
+        '''
+        # self.__loadfiles(self, Range)
+        pass
+                
     def build(self, Range, idxmask, savename = 'Files/demo'):
         '''
         Build slices from images
@@ -200,17 +209,20 @@ class Model3D:
         # Calib MPM
         print('Reading data')
         indexs = list(range(start_idx, end_idx))  # All index
-        self.__loadfiles([start_idx, start_idx + self.__calib]) # Initialize
+        
         # Memorize the deprecated MPM
         self.deprecated_mpm = []
         self.Slices = []
         self.depths = []
         for i in tqdm(indexs):  # for all mpm mean
-            depth = []
+            if i == start_idx or self.expected_rect[i] != self.expected_rect[i-1]:
+                self.__loadfiles([start_idx, start_idx + self.__calib]) # Initialize
+            
             '''
             Check if MPM image is corrupted, if use function place below:
                 i should be larger than start index
             '''
+            depth = []
             if self.__buffer[i].MPM_strip == 0 and i > 0:
                 self.deprecated_mpm.append(i)
                 self.__buffer[i].reconstruct(self.__buffer[i-1])
@@ -247,8 +259,8 @@ class Model3D:
                     OTmean = self.__buffer[i].OT_strip[j]
                     calib = mpmstrip/Std[j]/self._Settings[1]*10000
                     depth.append(self.model.predict(np.array([[OTmean, calib] + self._Settings])))
-            self.depths.append(depth)
             
+            self.depths.append(depth)
             # paint the depth on map
             for j in idxmask:
                 # !! This mask should set to np.zeros every time calling the function
@@ -263,6 +275,7 @@ class Model3D:
             # Unfilled aera will remain 255 and then got removed
             self.__buffer[i].region[self.__buffer[i].region == 255] = 0
             self.Slices.append(self.__buffer[i].region)
+        
         
         # Release the buffer
         self.buffer = {}
@@ -290,40 +303,6 @@ class Model3D:
         # np.save(savename + '_aftr', self.Slices)
         self.__Save01(Savename = savename + '_after')
         
-    # To avoid inconsistent cube recognition
-    '''
-    def __CheskMPM(self, i, maxdis = 100,  show = False):
-        for j, ctr in enumerate(self.__buffer[i].ctrs):
-            dis = np.sqrt(np.sum((ctr - self.__buffer[i-1].ctrs[j])**2))
-            if dis > maxdis:
-                print("\nIn consistent deprecated detected on "+str(i)+" : " \
-                      +str(j)+'distance ='+str(dis))
-                if show:
-                    img1 = cv2.cvtColor(self.__buffer[i-1].region, cv2.COLOR_GRAY2BGR)
-                    img2 = cv2.cvtColor(self.__buffer[i].region, cv2.COLOR_GRAY2BGR)
-                    for count, center in enumerate(self.__buffer[i-1].ctrs):
-                        cv2.putText(img1, str(count), center,
-                                    cv2.FONT_HERSHEY_COMPLEX, 
-                                    2, (0,255,0), 2)
-                    for count, center in enumerate(self.__buffer[i].ctrs):
-                        cv2.putText(img2, str(count), center,
-                                    cv2.FONT_HERSHEY_COMPLEX, 
-                                    2, (0,255,0), 2)
-                    img1 = cv2.resize(img1,(img1.shape[1]>>1, img1.shape[0]>>1))
-                    img2 = cv2.resize(img2,(img2.shape[1]>>1, img2.shape[0]>>1))
-                    cv2.imshow("img"+str(i-1),img1)
-                    cv2.imshow("img"+str(i),img2)
-                    cv2.waitKey()
-                    cv2.destroyAllWindows()
-                    
-                OT_name, MPM_name = self._idx2name(i)
-                # Replace the corrupted with OT
-                self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
-                                                    self.__MPM_type, 46, 
-                                                    useOT = True)})
-                return True
-        return False
-    '''
     
     def __Save01(self, Savename):
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
