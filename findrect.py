@@ -65,7 +65,7 @@ class FindRect:
             self._imshow(showcase)
     
         # Find mean rotation angle for all fitted rotate rect
-        Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in self._contours]).mean()
+        Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in self.contours]).mean()
         # Get Shift and rotate transform matrix M, and inverse M_
         # Scale little a bit to accomend to shifted image
         self._M = cv2.getRotationMatrix2D([self.src.shape[1]/2, 

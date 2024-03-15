@@ -15,7 +15,7 @@ class OT_mean(FindRect):
         super(OT_mean, self).__init__(filename, rectnum)
         self.src = cv2.imread(filename)
         # resize to shape of MPM
-        self.src = cv2.resize(self.src,(2500,2500,3))
+        self.src = cv2.resize(self.src,(2500,2500))
         self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
         self.__type__ = 'OT_mean'
     
