@@ -26,7 +26,7 @@ class Model3D:
         # Calibrated number should be larger than 5 
         self.__calib = max(5, Calib)
         # Need to adjuct
-        self.expected_rect = [46]*200
+        self.expected_rect = [46]*207 + [134]*33 +[24] * 10
         
         if 'Int' in Param:
             self.__OT_type = 'Int'
@@ -134,8 +134,9 @@ class Model3D:
                 The -1 Slice.
             '''
             # Cut the region out for OT to caculate
-            self.region[self.region == 0] = self.OT.erosion[slice_1>0]
-            self.OT.erosion = self.region
+            self.OT.erosion[slice_1.region == 0] = 0
+            self.region[self.region == 0] = self.OT.erosion[self.region == 0]
+            self.OT.erosion = self.region.astype(np.uint8 )
             self.OT.get_rotate()
             self.OT.find_inner_rects()
             self.OT.cal_mean()
@@ -197,7 +198,7 @@ class Model3D:
         # delete keys if unused        
         for key in list(self.__buffer.keys()):
             # remain some for deprecated 
-            if key < start_idx - self.badmpm or key > end_idx + self.badmpm:
+            if key < start_idx - self.badmpm: 
                 del self.__buffer[key]
                 # print('delete index'+str(key))
                 
@@ -221,27 +222,28 @@ class Model3D:
         # Memorize the deprecated MPM
         self.deprecated_mpm = []
         self.Slices = []
-        self.depths = []
+        # self.depths = []
         
         for i in tqdm(indexs):  # for all mpm mean
             
         # Initialize for each part
             if i == start_idx or self.expected_rect[i] != self.expected_rect[i-1]:
                 self.__loadfiles([start_idx, start_idx + self.__calib]) 
-            
+                
             '''
             Check if MPM image is corrupted, if use function place below:
                 i should be larger than start index
             '''
             
             depth = []
+            # print(self.__buffer.keys())
             if self.__buffer[i].MPM_strip == 0:
                 assert i > start_idx
                 self.deprecated_mpm.append(i)
                 # self.__buffer[i].
                 for otstrip in self.__buffer[i].OT_strip:
                     depth.append(self.OTmodel.predict(
-                        np.array([otstrip]+self._Settings)))
+                        np.array([[otstrip]+self._Settings])))
             
             else:  # Use MPM and OT together to calculate the depth
                 last_depcount = 0
@@ -251,10 +253,8 @@ class Model3D:
                     capable = [j for j in indexs if \
                                self.expected_rect[j] == self.expected_rect[i]]
                     nearest = sorted(capable, key = lambda n: abs(i - \
-                                n))[:self.__calib + deprcount]
-                    
-                    #  print(nearest)
-                    self.__loadfiles([min(nearest), max(nearest) + self.badmpm + 1])
+                                n))[:self.__calib + deprcount  + self.badmpm]
+                    self.__loadfiles([min(nearest), max(nearest) + self.badmpm])
                     
                     # Check if there's deprecated MPM in range
                     for slices in self.__buffer.values():
@@ -265,7 +265,7 @@ class Model3D:
                         break
                     else:  # Find another MPM
                         last_depcount = deprcount 
-                
+                        
                 # caculate mean mpm for nearest figure
                 slices = [self.__buffer[j].MPM_strip for j in nearest \
                           if self.__buffer[j].MPM_strip != 0]
@@ -277,7 +277,7 @@ class Model3D:
                     calib = mpmstrip/Std[j]/self._Settings[1]*10000
                     depth.append(self.model.predict(np.array([[OTmean, calib] + self._Settings])))
             
-            self.depths.append(depth)
+            # self.depths.append(depth)
             # paint the depth on map
             for j in idxmask:
                 # !! This mask should set to np.zeros every time calling the function
@@ -301,13 +301,13 @@ class Model3D:
         self.Slices = np.transpose(np.array(self.Slices),(1,2,0))
         
         # repair the deprecated, Can have sth to do here
-        for i in self.deprecated_mpm:
-            idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
-            self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
+        # for i in self.deprecated_mpm:
+        #     idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
+        #     self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
             
         # Too large to save painted ones, save unpainted ones instead
         self.__Save01(Savename = savename + '_original')
-        np.save(savename + '_depths', np.array(self.depths))
+        # np.save(savename + '_depths', np.array(self.depths))
         
     def updateDepth(self, savename, Downskin = True):
         # update depth
@@ -325,6 +325,7 @@ class Model3D:
         Slices = np.zeros(self.Slices.shape).astype(np.uint8)
         Slices[self.Slices>0] = 255
         np.save(Savename, Slices)
+        
     
     def ShowSlice(self, i):
         '''
@@ -472,7 +473,7 @@ if __name__ == '__main__':
         obj = Model3D(openname)
     else:
         obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
-        obj.build(Range = [0,200],
+        obj.build(Range = [0,250],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         
