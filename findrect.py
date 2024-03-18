@@ -58,6 +58,7 @@ class FindRect:
     # Sort the founded rectangles and find biggest sizes
     def get_rotate(self, show = False):
         self.contours, _ = cv2.findContours(self.erosion, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        self.contours = [_ for _ in self.contours if _.size > 10]
         self.contours = sorted(self.contours, key = lambda x : x.size, reverse = True)[:self.rectnum]
         if show:
             showcase = self.src.copy()
@@ -80,6 +81,7 @@ class FindRect:
         #find contours in rects plotted in vertical angle
         contours2, _ = cv2.findContours(self.__rotated_img, cv2.RETR_LIST,
                                         cv2.CHAIN_APPROX_SIMPLE)
+        contours2 = [_ for _ in contours2 if _.size > 8]
         contours2 = sorted(contours2, key = lambda x : cv2.contourArea(x), 
                            reverse = True)[:self.rectnum]
         # need to arrange for this initial order

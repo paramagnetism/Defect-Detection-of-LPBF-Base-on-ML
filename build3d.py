@@ -26,7 +26,7 @@ class Model3D:
         # Calibrated number should be larger than 5 
         self.__calib = max(5, Calib)
         # Need to adjuct
-        self.expected_rect = [46]*207 + [134]*33 +[24] * 10
+        self.expected_rect = [46]*207 + [134]*33 + [24] * 10
         
         if 'Int' in Param:
             self.__OT_type = 'Int'
@@ -69,11 +69,11 @@ class Model3D:
             with open(filename,"rb") as f:
                 loaded = pickle.load(f)
             models.append(loaded)
-            # print(type(loaded))
         self.model = models[0]['model']
         self.OTmodel = models[1]['model']
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
+        
         
     class _Slice:
         def __init__(self, OT_picname, MPM_root, mode, rectnum):
@@ -105,7 +105,7 @@ class Model3D:
             self.region = MPM.erosion.astype(np.float32)
             
             # Calculate OT + MPM
-            if len(MPM.mean) == rectnum:
+            if len(MPM.mean) == rectnum and min(MPM.mean):
                 OT.erosion = MPM.erosion
                 OT.get_rotate()
                 OT.find_inner_rects()
@@ -136,10 +136,11 @@ class Model3D:
             # Cut the region out for OT to caculate
             self.OT.erosion[slice_1.region == 0] = 0
             self.region[self.region == 0] = self.OT.erosion[self.region == 0]
-            self.OT.erosion = self.region.astype(np.uint8 )
+            self.OT.erosion = self.region.astype(np.uint8)
             self.OT.get_rotate()
             self.OT.find_inner_rects()
             self.OT.cal_mean()
+            
             assert len(self.OT.mean) == self.rectnum
             self.OT_strip = self.OT.mean
             self.ctrs = self.OT.ctrs
@@ -147,19 +148,39 @@ class Model3D:
             self.OT = True
         
         def recenter(self, centers):
+            '''
+            To relocate all examined centers according to nearest distance
+            ------
+            Parameters:
+                centers: (list of np array) centers from last layer
+                
+            Returns:
+                None
+            '''
             if centers:
+                # print(len(centers))
                 idx = [sorted([_ for _ in range(len(centers))], 
                                  key = lambda x: np.linalg.norm(self.ctrs[x]
                                 - ctr))[0] for ctr in centers]
+                
+                # print(len(self.contours))
                 self.ctrs = [self.ctrs[i] for i in idx]
                 self.contours = [self.contours[i] for i in idx]
                 self.OT_strip =  [self.OT_strip[i] for i in idx]
                 if self.MPM_strip != 0:
                     self.MPM_strip =  [self.MPM_strip[i] for i in idx]
-                    
+                       
 
     def _idx2name(self, i):
-        # Can change MPM to pic
+        '''
+        To trasnlate loading index to 
+        ------
+        Parameters:
+            centers: (list of np array) centers from last layer
+            
+        Returns:
+            None
+        '''
         numb = (i + 1) * 3
         ten = numb % 100
         hund = int((numb - ten)/100)
@@ -187,13 +208,14 @@ class Model3D:
                 self.__buffer.update({i:self._Slice(OT_name, MPM_name, 
                                 self.__MPM_type, self.expected_rect[i])})
                 
+                # print('load' + str(i) + MPM_name)
                 # Check if MPM is corrupted
                 if i-1 in self.__buffer.keys():
                     if self.__buffer[i].MPM_strip == 0:
                         self.__buffer[i].reconstruct(self.__buffer[i-1])
-                
+        
                     # Recenter all the points
-                    self.__buffer[i].recenter(self.__buffer[i-1].ctrs)
+                    self.__buffer[i].recenter(self.__buffer[i-1].ctrs)  
                 
         # delete keys if unused        
         for key in list(self.__buffer.keys()):
@@ -225,10 +247,11 @@ class Model3D:
         # self.depths = []
         
         for i in tqdm(indexs):  # for all mpm mean
-            
         # Initialize for each part
             if i == start_idx or self.expected_rect[i] != self.expected_rect[i-1]:
-                self.__loadfiles([start_idx, start_idx + self.__calib]) 
+                # Empty buffer for new portion
+                self.__buffer = {}
+                self.__loadfiles([i, i + self.__calib]) 
                 
             '''
             Check if MPM image is corrupted, if use function place below:
@@ -236,9 +259,11 @@ class Model3D:
             '''
             
             depth = []
-            # print(self.__buffer.keys())
             if self.__buffer[i].MPM_strip == 0:
-                assert i > start_idx
+                try:
+                    assert i > start_idx
+                except AssertionError:
+                    print("First MPM deprecated!")
                 self.deprecated_mpm.append(i)
                 # self.__buffer[i].
                 for otstrip in self.__buffer[i].OT_strip:
@@ -254,8 +279,9 @@ class Model3D:
                                self.expected_rect[j] == self.expected_rect[i]]
                     nearest = sorted(capable, key = lambda n: abs(i - \
                                 n))[:self.__calib + deprcount  + self.badmpm]
-                    self.__loadfiles([min(nearest), max(nearest) + self.badmpm])
-                    
+                    # because loadfile don't load the last one
+                    self.__loadfiles([min(nearest), max(nearest)+1])
+
                     # Check if there's deprecated MPM in range
                     for slices in self.__buffer.values():
                         if slices.MPM_strip == 0 :
@@ -265,7 +291,12 @@ class Model3D:
                         break
                     else:  # Find another MPM
                         last_depcount = deprcount 
-                        
+                
+                #print('nearest')
+                #print(nearest)
+                #print('buffer')
+                #print(self.__buffer.keys())
+                
                 # caculate mean mpm for nearest figure
                 slices = [self.__buffer[j].MPM_strip for j in nearest \
                           if self.__buffer[j].MPM_strip != 0]
@@ -299,11 +330,6 @@ class Model3D:
         
         # Transpose for 3D drawing
         self.Slices = np.transpose(np.array(self.Slices),(1,2,0))
-        
-        # repair the deprecated, Can have sth to do here
-        # for i in self.deprecated_mpm:
-        #     idx = i+1 if (i<end_idx-2 and i+1 not in self.deprecated_mpm) else i-1
-        #     self.Slices[:,:,i-start_idx][self.Slices[:,:, idx-start_idx]==0] = 0
             
         # Too large to save painted ones, save unpainted ones instead
         self.__Save01(Savename = savename + '_original')
@@ -465,7 +491,6 @@ class Model3D:
         cv2.imwrite('Files/slice.png', color)
         return Real
         
-    
 if __name__ == '__main__':
     model3Dname = 'Files/demo'
     openname = model3Dname + '_after.npy'
@@ -473,11 +498,11 @@ if __name__ == '__main__':
         obj = Model3D(openname)
     else:
         obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
-        obj.build(Range = [0,250],
+        obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         
-        #obj.updateDepth(savename = model3Dname)
-    #Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
-    #fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
+        obj.updateDepth(savename = model3Dname)
+    Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
+    fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
