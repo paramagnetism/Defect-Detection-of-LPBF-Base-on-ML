@@ -310,7 +310,8 @@ class Model3D:
             
             # self.depths.append(depth)
             # paint the depth on map
-            for j in idxmask:
+            # for j in idxmask:
+            for j in [i for i in range(len(depth))]:
                 # !! This mask should set to np.zeros every time calling the function
                 cv2.floodFill(self.__buffer[i].region, np.zeros((2502, 2502)).astype(np.uint8), 
                               self.__buffer[i].ctrs[j], depth[j], 
@@ -400,6 +401,7 @@ class Model3D:
         src = mlab.pipeline.scalar_field(xx, yy, zz, self.Slices)
         vol = mlab.pipeline.iso_surface(src)
         vol.actor.property.opacity = 0.5
+        mlab.show()
         return src, vol
     
     # Success plot
@@ -484,8 +486,8 @@ class Model3D:
         points = [(round(begin[0]+d*dx), round(begin[1]+d*dy))  for d in range(round(dis))]
         Slice = np.flipud(np.array([self.Slices[pts[1], pts[0], :] for pts in points]).T)
         origin = np.flipud(np.array([original[pts[1], pts[0], :] for pts in points]).T)
-        Real = cv2.resize(Slice, (Slice.shape[1], round(Slice.shape[0]*0.3)))
-        real = cv2.resize(origin, (origin.shape[1], round(origin.shape[0]*0.3)))
+        Real = cv2.resize(Slice, (round(Slice.shape[1]*10/3), Slice.shape[0]))
+        real = cv2.resize(origin, (round(origin.shape[1]*10/3), origin.shape[0]))
         color = cv2.cvtColor(Real,cv2.COLOR_GRAY2BGR)
         color[Real>real]=(0,255,0)
         cv2.imwrite('Files/slice.png', color)
@@ -501,8 +503,9 @@ if __name__ == '__main__':
         obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
-        
-        obj.updateDepth(savename = model3Dname)
+    #obj.ShowVideo()
+    
+    obj.updateDepth(savename = model3Dname)
     Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
     fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
