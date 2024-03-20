@@ -24,7 +24,6 @@ class OT_mean(FindRect):
         self.mean = []
         count = 0 
         # For generating map
-        self.ctrs = []
         #for show labeled order
         for x1, y1, x2, y2 in self._inner_rects:
             width = x2 - x1
@@ -33,7 +32,6 @@ class OT_mean(FindRect):
                 xx2 = x1+((i+1)*step-gap)*width
                 corners = [(xx1, y1), (xx1, y2), (xx2, y2), (xx2, y1)]
                 pts = [np.dot(self._M_, np.array([cnr[0], cnr[1], 1])) for cnr in corners]
-                
                 if show:
                     for j in range(4):
                         pt1 = (round(pts[j][0]), round(pts[j][1]))
@@ -49,8 +47,6 @@ class OT_mean(FindRect):
                 cv2.fillConvexPoly(mask, pts, (255))
                 self.mean.append(cv2.mean(self._gray, mask)[0])
                 
-                # The OT centers should be in 2500 scale
-                self.ctrs.append(((pts[0]+pts[2])/2).astype(np.int32))
                 
         if show:
             self._imshow(self.src)

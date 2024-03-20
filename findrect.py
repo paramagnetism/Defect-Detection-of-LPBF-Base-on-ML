@@ -20,6 +20,15 @@ class FindRect:
         self.strip_color = []
         self._max_black = 10
         
+    def Set(self, img):
+        if len(img.shape) == 2:
+            self.src = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            self._gray = img
+        else:
+            self.src = img
+            self._gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        
     # show the image in 1/2 size for the screen
     def _imshow(self, img):
         img = cv2.resize(img,(img.shape[1]>>1, img.shape[0]>>1))
@@ -60,6 +69,9 @@ class FindRect:
         self.contours, _ = cv2.findContours(self.erosion, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         self.contours = [_ for _ in self.contours if _.size > 10]
         self.contours = sorted(self.contours, key = lambda x : x.size, reverse = True)[:self.rectnum]
+        MM = [cv2.moments(contour) for contour in self.contours]
+        self.ctrs = [np.array([int(M["m10"] / M["m00"]), 
+                               int(M["m01"] / M["m00"])]) for M in MM]
         if show:
             showcase = self.src.copy()
             cv2.drawContours(showcase, self._contours, -1, (0,255,0), 1)

@@ -22,11 +22,11 @@ class Model3D:
                  Param = 'IntOn', 
                  badmpm = 2,
                  # Laser Power, Scanning Speed = 370, 1300 as default
-                 Settings = [370, 1300]):
+                 Settings = [340, 1150]): # 
         # Calibrated number should be larger than 5 
         self.__calib = max(5, Calib)
         # Need to adjuct
-        self.expected_rect = [46]*207 + [134]*33 + [24] * 10
+        self.expected_rect = [46]*207 + [134]*33 + [24] * 10 + [0] + [12] * 64
         
         if 'Int' in Param:
             self.__OT_type = 'Int'
@@ -76,10 +76,11 @@ class Model3D:
         
         
     class _Slice:
-        def __init__(self, OT_picname, MPM_root, mode, rectnum):
+        def __init__(self, OT_picname : str, MPM_root : str,
+                     mode : int, rectnum: int):
             OT = OT_mean(OT_picname, rectnum = rectnum)
             OT.sorting_slope = 10
-            self.rectnum = rectnum
+            
             # if tiff image
             if MPM_root[-4:] == '.tif':
                 MPM = MPM_mean(MPM_root, rectnum = rectnum)
@@ -102,8 +103,8 @@ class Model3D:
                     MPM.FullProcess()
                     MPM.cal_mean(point_list, show = False)
                     
+            self.rectnum = rectnum
             self.region = MPM.erosion.astype(np.float32)
-            
             # Calculate OT + MPM
             if len(MPM.mean) == rectnum and min(MPM.mean):
                 OT.erosion = MPM.erosion
@@ -114,9 +115,8 @@ class Model3D:
                 self.MPM_strip = MPM.mean
                 self.ctrs = MPM.ctrs
                 self.contours = MPM.contours
-                
             else:
-                print('\n'+MPM_root+' deprecated, use OT instead')
+                print('\n'+ MPM_root +' deprecated, use OT instead')
                 self.MPM_strip = 0
                 self.ctrs = []
                 # Caculate only with OT
@@ -169,7 +169,7 @@ class Model3D:
                 self.OT_strip =  [self.OT_strip[i] for i in idx]
                 if self.MPM_strip != 0:
                     self.MPM_strip =  [self.MPM_strip[i] for i in idx]
-                       
+                    
 
     def _idx2name(self, i):
         '''
@@ -197,6 +197,7 @@ class Model3D:
             MPM_name = 'Vaildation print 31102023_SI246120231031190932_' \
                 + MPM_name + '_00.mpm_ma_' + self.__MPM_type + 'axis.tif'
             MPM_name = os.path.join(self.MPM_root, MPM_name)
+        
         return OT_name, MPM_name
     
     # Given index name, update value in self.__buffer    
@@ -244,14 +245,25 @@ class Model3D:
         # Memorize the deprecated MPM
         self.deprecated_mpm = []
         self.Slices = []
-        # self.depths = []
         
         for i in tqdm(indexs):  # for all mpm mean
         # Initialize for each part
             if i == start_idx or self.expected_rect[i] != self.expected_rect[i-1]:
+                if self.expected_rect[i] == self.expected_rect[i+1]:
                 # Empty buffer for new portion
-                self.__buffer = {}
-                self.__loadfiles([i, i + self.__calib]) 
+                    self.__buffer = {}
+                    self.__loadfiles([i, i + self.__calib])
+                else:
+                    OT_name, MPM_name = self._idx2name(i)
+                    MPM = cv2.imread(MPM_name, cv2.IMREAD_GRAYSCALE)
+                    mpm = MPM.copy()
+                    # downskin region
+                    mpm[MPM > self.__buffer[i-1].region] = 0 
+                    # normal region
+                    MPM[MPM==mpm] = 0
+                    cv2.imwrite("downskin.bmp", mpm)
+                    cv2.imwrite("normal.bmp", MPM)
+                    
                 
             '''
             Check if MPM image is corrupted, if use function place below:
@@ -264,6 +276,7 @@ class Model3D:
                     assert i > start_idx
                 except AssertionError:
                     print("First MPM deprecated!")
+                    
                 self.deprecated_mpm.append(i)
                 # self.__buffer[i].
                 for otstrip in self.__buffer[i].OT_strip:
@@ -336,6 +349,7 @@ class Model3D:
         self.__Save01(Savename = savename + '_original')
         # np.save(savename + '_depths', np.array(self.depths))
         
+    
     def updateDepth(self, savename, Downskin = True):
         # update depth
         if Downskin:
@@ -486,11 +500,15 @@ class Model3D:
         points = [(round(begin[0]+d*dx), round(begin[1]+d*dy))  for d in range(round(dis))]
         Slice = np.flipud(np.array([self.Slices[pts[1], pts[0], :] for pts in points]).T)
         origin = np.flipud(np.array([original[pts[1], pts[0], :] for pts in points]).T)
-        Real = cv2.resize(Slice, (round(Slice.shape[1]*10/3), Slice.shape[0]))
-        real = cv2.resize(origin, (round(origin.shape[1]*10/3), origin.shape[0]))
-        color = cv2.cvtColor(Real,cv2.COLOR_GRAY2BGR)
-        color[Real>real]=(0,255,0)
+        Real = cv2.resize(Slice, (round(Slice.shape[1]*10/3), Slice.shape[0]), 
+                          interpolation=cv2.INTER_NEAREST)
+        real = cv2.resize(origin, (round(origin.shape[1]*10/3), origin.shape[0]),
+                          interpolation=cv2.INTER_NEAREST)
+        color = cv2.cvtColor(Real, cv2.COLOR_GRAY2BGR)
+        color[Real > real]=(0,255,0)
         cv2.imwrite('Files/slice.png', color)
+        cv2.imwrite('Files/origin.png', real)
+        cv2.imwrite('Files/after.png', Real)
         return Real
         
 if __name__ == '__main__':
@@ -503,9 +521,10 @@ if __name__ == '__main__':
         obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
-    #obj.ShowVideo()
+        obj.updateDepth(savename = model3Dname)
     
-    obj.updateDepth(savename = model3Dname)
     Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
     fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
+    
+    obj.ShowSlice(202)
     

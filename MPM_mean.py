@@ -30,7 +30,6 @@ class MPM_mean(FindRect):
         if show or self.__type__ == 'MPM_mean_graph':
             count = 0
             self.mean = []
-            self.ctrs = []
         # to show labeled order
             for x1, y1, x2, y2 in self._inner_rects:
                 width = x2 - x1
@@ -55,7 +54,6 @@ class MPM_mean(FindRect):
                         # exclude pixel without signal
                         mask[self._gray < 2] = 0
                         self.mean.append(cv2.mean(self._gray, mask)[0])
-                        self.ctrs.append(((pts[0]+pts[2])/2).astype(np.int32))
                         
         if show: self._imshow(self.src) 
         if self.__type__ == 'MPM_mean_excel':
