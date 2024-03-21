@@ -9,16 +9,20 @@ import numpy as np
 import cv2
 from data2excel import csv_read
 
-class FindRect:
+class FindContour:
     def __init__(self, filename, rectnum):
         self.rectnum = rectnum
-        self.divpart = 5 if rectnum == 22 else 1
-        self.sorting_slope = 10 if rectnum == 22 else 0.55
         self.__type__ = 'val_mean'
         self._gray = np.zeros((2,2))
         self.erosion = np.zeros((2,2)) 
         self.strip_color = []
-        self._max_black = 10
+        if type(filename) == str:
+            self.src = cv2.imread(filename)
+            # resize to shape of MPM
+            self.src = cv2.resize(self.src,(2500,2500))
+            self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
+        elif type(filename) == np.ndarray:
+            self.Set(filename)
         
     def Set(self, img):
         if len(img.shape) == 2:
@@ -27,15 +31,14 @@ class FindRect:
         else:
             self.src = img
             self._gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        
+            
     # show the image in 1/2 size for the screen
     def _imshow(self, img):
         img = cv2.resize(img,(img.shape[1]>>1, img.shape[0]>>1))
         cv2.imshow("show",img)
         cv2.waitKey()
         cv2.destroyAllWindows()
-        
+    
     # Plot hist to observe for a good threshold
     def hist(self): 
         hist = cv2.calcHist([self._gray], channels = [0], mask = None, 
@@ -44,7 +47,7 @@ class FindRect:
         hist2 = cv2.calcHist([aft_hist], channels = [0], mask = None, 
                              histSize = [256], ranges = [0, 256])
         return hist, hist2
-       
+    
     # Threshold operation, usually choose thresh = 3
     def threshold(self, threshold = 3, show = False):
         ret, self.erosion = cv2.threshold(self._gray, threshold, 255, cv2.THRESH_BINARY)
@@ -54,18 +57,14 @@ class FindRect:
     # close operation removing noise
     # the kernel should be bigger with larger threshold
     def morphoperation(self, close_kernel_size, show = False): 
-        close_kernel_size = 15 if self.__type__ == 'OT_mean' else 2
+        close_kernel_size = 2
         kernel = np.ones((close_kernel_size, close_kernel_size), dtype=np.uint8)
         self.erosion = cv2.morphologyEx(self.erosion, cv2.MORPH_CLOSE, kernel = kernel)
-        if self.__type__ == 'OT_mean':
-            self.erosion = cv2.erode(self.erosion, (3, 3), iterations = 3)
-            
         if show:
             self._imshow(self.erosion)
-
-    
+        
     # Sort the founded rectangles and find biggest sizes
-    def get_rotate(self, show = False):
+    def get_contours(self, show = False):
         self.contours, _ = cv2.findContours(self.erosion, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         self.contours = [_ for _ in self.contours if _.size > 10]
         self.contours = sorted(self.contours, key = lambda x : x.size, reverse = True)[:self.rectnum]
@@ -74,9 +73,38 @@ class FindRect:
                                int(M["m01"] / M["m00"])]) for M in MM]
         if show:
             showcase = self.src.copy()
-            cv2.drawContours(showcase, self._contours, -1, (0,255,0), 1)
+            cv2.drawContours(showcase, self.contours, -1, (0,255,0), 1)
+            for i, contour in self.contours:
+                cv2.putText(showcase, str(i),self.ctrs[i], cv2.FONT_HERSHEY_COMPLEX, 
+                            3/self.divpart, (0,0,255), 1)
             self._imshow(showcase)
-    
+     
+    def cal_mean(self):
+        self.mean = []
+        for contour in self.contours:
+            mask = np.zeros_like(self._gray)
+            cv2.drawContours(mask, [contour], -1, (255), thickness=cv2.FILLED)
+            self.mean.append(cv2.mean(self._gray, mask=mask)[0])
+
+                
+            
+    def FullProcess(self, threshold = 3, close = 15):
+        self.threshold(threshold)
+        self.morphoperation(close)
+        self.get_contours()
+        self.cal_mean()
+
+
+class FindRect(FindContour):
+    def __init__(self, filename, rectnum):
+        super(FindRect, self).__init__(filename, rectnum)
+        self.divpart = 5 if rectnum == 22 else 1
+        self.sorting_slope = 10 if rectnum == 22 else 0.55
+        self._max_black = 10
+           
+            
+    def get_rotate(self, show = False):
+        super().get_contours()
         # Find mean rotation angle for all fitted rotate rect
         Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in self.contours]).mean()
         # Get Shift and rotate transform matrix M, and inverse M_
@@ -88,6 +116,7 @@ class FindRect:
         # Do Affine transform, .img is the transformed vertical plot
         self.__rotated_img = cv2.warpAffine(self.erosion, self._M, 
                                             (self.src.shape[0], self.src.shape[1]))
+
 
     def find_inner_rects(self, show = False):
         #find contours in rects plotted in vertical angle
@@ -143,7 +172,6 @@ class FindRect:
                     count += 1  
             
         # return self.strip_color    
-    
     def FullProcess(self, threshold = 3, close = 15):
         self.threshold(threshold)
         self.morphoperation(close)

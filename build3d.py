@@ -14,10 +14,10 @@ from tqdm import tqdm
 # local lib
 from OT_mean import OT_mean
 from MPM_mean import MPM_mean
-from findrect import Pointlist
+from findrect import Pointlist, FindContour
 
 class Model3D:
-    def __init__(self, roots, 
+    def __init__(self, roots, prefix,
                  Calib = 6, 
                  Param = 'IntOn', 
                  badmpm = 2,
@@ -27,7 +27,7 @@ class Model3D:
         self.__calib = max(5, Calib)
         # Need to adjuct
         self.expected_rect = [46]*207 + [134]*33 + [24] * 10 + [0] + [12] * 64
-        
+        [self.OT_prefix, self.MPM_prefix] = prefix
         if 'Int' in Param:
             self.__OT_type = 'Int'
         elif 'Max' in Param:
@@ -70,38 +70,44 @@ class Model3D:
                 loaded = pickle.load(f)
             models.append(loaded)
         self.model = models[0]['model']
-        self.OTmodel = models[1]['model']
+        self.OTmodel = models[1]['model']                                               
         self.Downskin = models[3].predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
         
         
     class _Slice:
         def __init__(self, OT_picname : str, MPM_root : str,
-                     mode : int, rectnum: int):
-            OT = OT_mean(OT_picname, rectnum = rectnum)
-            OT.sorting_slope = 10
-            
-            # if tiff image
-            if MPM_root[-4:] == '.tif':
-                MPM = MPM_mean(MPM_root, rectnum = rectnum)
-                MPM.sorting_slope = 10
+                     mode : int, rectnum: int, general = True):
+            if general:
+                MPM = FindContour(MPM_root, rectnum = rectnum)
+                OT = FindContour(OT_picname, rectnum = rectnum)
                 MPM.FullProcess()
-                MPM.cal_mean([], show = False) # 5 / 1
-            
-            # if is root name
+                
             else:
-                for root, dirs, files in os.walk(MPM_root):
-                    files.sort()
-                    filenames = [os.path.join(root, filename) for filename in files]
-                    
-                    # Use modol = on as default
-                    point_list = Pointlist(filenames[2], filenames[3], 
-                                           filenames[mode], params = 'anticlock')
-                    
-                    gray = point_list.imshow()
-                    MPM = MPM_mean(gray, rectnum = rectnum)
+                OT = OT_mean(OT_picname, rectnum = rectnum)
+                OT.sorting_slope = 10
+                
+                # if tiff image
+                if MPM_root[-4:] == '.tif':
+                    MPM = MPM_mean(MPM_root, rectnum = rectnum)
+                    MPM.sorting_slope = 10
                     MPM.FullProcess()
-                    MPM.cal_mean(point_list, show = False)
+                    MPM.cal_mean([], show = False) # 5 / 1
+                
+                # if is root name
+                else:
+                    for root, dirs, files in os.walk(MPM_root):
+                        files.sort()
+                        filenames = [os.path.join(root, filename) for filename in files]
+                        
+                        # Use modol = on as default
+                        point_list = Pointlist(filenames[2], filenames[3], 
+                                               filenames[mode], params = 'anticlock')
+                        
+                        gray = point_list.imshow()
+                        MPM = MPM_mean(gray, rectnum = rectnum)
+                        MPM.FullProcess()
+                        MPM.cal_mean(point_list, show = False)
                     
             self.rectnum = rectnum
             self.region = MPM.erosion.astype(np.float32)
@@ -185,8 +191,9 @@ class Model3D:
         ten = numb % 100
         hund = int((numb - ten)/100)
         MPM_name = '00'+ str(hund)+ '_' + str(ten).zfill(2) + '0'
-        OT_name = 'SI246120231031190932_' + str(i)+'_' + MPM_name +'_' \
+        OT_name = self.OT_prefix + str(i)+'_' + MPM_name +'_' \
             + self.__OT_type + '_32F.tif'
+
         OT_name = os.path.join(self.OT_root, OT_name)
         # if MPM is from excel files
         MPM_name1 = os.path.join(self.MPM_root, MPM_name)
@@ -194,8 +201,10 @@ class Model3D:
             MPM_name = MPM_name1 
         else:
             self.__MPM_type = 'on' if self.__MPM_type == 1 else 'off'
-            MPM_name = 'Vaildation print 31102023_SI246120231031190932_' \
-                + MPM_name + '_00.mpm_ma_' + self.__MPM_type + 'axis.tif'
+
+            MPM_name = self.MPM_prefix + MPM_name + '_00.mpm_ma_' \
+            + self.__MPM_type + 'axis.tif'
+                
             MPM_name = os.path.join(self.MPM_root, MPM_name)
         
         return OT_name, MPM_name
@@ -517,7 +526,13 @@ if __name__ == '__main__':
     if os.path.exists(openname):
         obj = Model3D(openname)
     else:
-        obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
+        # obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
+        obj = Model3D(['C:/AAAWeichen/Mold (important!)/OT', 
+                       'C:/AAAWeichen/Mold (important!)/MPMTIFF'],
+                      # [ 'SI246120231031190932_' 
+                      # 'Vaildation print 31102023_SI246120231031190932_']
+                      ['SI246120230324152157_',
+                       'MPM-Mold-Figures_SI246120230324152157_'])
         obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)

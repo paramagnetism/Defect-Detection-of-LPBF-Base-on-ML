@@ -13,11 +13,11 @@ from data2excel import XLS
 class OT_mean(FindRect):
     def __init__(self, filename, rectnum):
         super(OT_mean, self).__init__(filename, rectnum)
-        self.src = cv2.imread(filename)
-        # resize to shape of MPM
-        self.src = cv2.resize(self.src,(2500,2500))
-        self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
         self.__type__ = 'OT_mean'
+    
+    def morphoperation(self, close_kernel_size, show = False):
+        super().morphoperation()
+        self.erosion = cv2.erode(self.erosion, (3, 3), iterations = 3)    
     
     def cal_mean(self, gap = 0.05, show = False):
         step = (1+gap)/self.divpart

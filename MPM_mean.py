@@ -15,12 +15,8 @@ class MPM_mean(FindRect):
         super(MPM_mean, self).__init__(filename, rectnum)
         self._max_black = 50
         if type(filename) == str:     
-            self.src = cv2.imread(filename)
-            self._gray = cv2.cvtColor(self.src, cv2.COLOR_BGR2GRAY)
             self.__type__ = 'MPM_mean_graph'
         else:  
-            self.src = cv2.cvtColor(filename, cv2.COLOR_GRAY2BGR)
-            self._gray = filename
             self.__type__ = 'MPM_mean_excel'
         
     def cal_mean(self, pointlist, gap = 0.05, show = False):
