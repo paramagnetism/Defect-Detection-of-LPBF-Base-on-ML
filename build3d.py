@@ -524,21 +524,23 @@ if __name__ == '__main__':
     model3Dname = 'Files/demo'
     openname = model3Dname + '_after.npy'
     if os.path.exists(openname):
-        obj = Model3D(openname)
+        obj = Model3D(openname, 
+                      ['SI246120231031190932_',
+                       'Vaildation print 31102023_SI246120231031190932_'])
+                      # ['SI246120230324152157_',
+                      # 'MPM-Mold-Figures_SI246120230324152157_'])
     else:
         # obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
         obj = Model3D(['C:/AAAWeichen/Mold (important!)/OT', 
-                       'C:/AAAWeichen/Mold (important!)/MPMTIFF'],
-                      # [ 'SI246120231031190932_' 
-                      # 'Vaildation print 31102023_SI246120231031190932_']
-                      ['SI246120230324152157_',
-                       'MPM-Mold-Figures_SI246120230324152157_'])
+                       'C:/AAAWeichen/Mold (important!)/MPMTIFF'])
+    
         obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         obj.updateDepth(savename = model3Dname)
     
-    Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
+    # Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
+    Slice = obj.CutSlice((638,730), (1598,365), originalPath = model3Dname+ '_original.npy')
     fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
     obj.ShowSlice(202)
