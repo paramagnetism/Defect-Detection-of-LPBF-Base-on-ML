@@ -56,8 +56,7 @@ class FindContour:
     
     # close operation removing noise
     # the kernel should be bigger with larger threshold
-    def morphoperation(self, close_kernel_size, show = False): 
-        close_kernel_size = 2
+    def morphoperation(self, close_kernel_size = 2, show = False): 
         kernel = np.ones((close_kernel_size, close_kernel_size), dtype=np.uint8)
         self.erosion = cv2.morphologyEx(self.erosion, cv2.MORPH_CLOSE, kernel = kernel)
         if show:
@@ -74,9 +73,9 @@ class FindContour:
         if show:
             showcase = self.src.copy()
             cv2.drawContours(showcase, self.contours, -1, (0,255,0), 1)
-            for i, contour in self.contours:
+            for i, contour in enumerate(self.contours):
                 cv2.putText(showcase, str(i),self.ctrs[i], cv2.FONT_HERSHEY_COMPLEX, 
-                            3/self.divpart, (0,0,255), 1)
+                            3, (0,0,255), 1)
             self._imshow(showcase)
      
     def cal_mean(self):
@@ -85,26 +84,25 @@ class FindContour:
             mask = np.zeros_like(self._gray)
             cv2.drawContours(mask, [contour], -1, (255), thickness=cv2.FILLED)
             self.mean.append(cv2.mean(self._gray, mask=mask)[0])
-
-                
+         
             
-    def FullProcess(self, threshold = 3, close = 15):
-        self.threshold(threshold)
-        self.morphoperation(close)
-        self.get_contours()
+    def FullProcess(self, threshold = 3, close = 3, show = False):
+        self.threshold(threshold,show = show)
+        self.morphoperation(close, show = show)
+        self.get_contours(show = show)
         self.cal_mean()
 
 
 class FindRect(FindContour):
     def __init__(self, filename, rectnum):
-        super(FindRect, self).__init__(filename, rectnum)
+        super().__init__(filename, rectnum)
         self.divpart = 5 if rectnum == 22 else 1
         self.sorting_slope = 10 if rectnum == 22 else 0.55
         self._max_black = 10
            
             
     def get_rotate(self, show = False):
-        super().get_contours()
+        super().get_contours(show = show)
         # Find mean rotation angle for all fitted rotate rect
         Mean_angle = np.array([cv2.minAreaRect(cnt)[2]-90 for cnt in self.contours]).mean()
         # Get Shift and rotate transform matrix M, and inverse M_
@@ -167,7 +165,7 @@ class FindRect(FindContour):
             for name in ['N_', '45Deg_', '30Deg_']:
                 for i in range(9):
                     rst = {'No. Part': name + str(i+1),
-                           valname : self._Mean[count]}
+                           valname : self.mean[count]}
                     self.strip_color.append(rst)
                     count += 1  
             

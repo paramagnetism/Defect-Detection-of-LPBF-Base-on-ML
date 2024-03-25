@@ -52,21 +52,25 @@ class AutoTrain:
             dts /= dts.std()
         return np.cov(datas)
     
-    def __batchTrain(self, labelid, batchnum = 1, test_size = 0.2, rm_ratio = 0.2):
+    def batchTrain(self, labelid, batchnum = 1, test_size = 0.2, rm_ratio = 0.2):
         n = (len(labelid) + len(labelid)**2) >> 1
         self.X = np.array(self.data[[self.Labels[i] for i in labelid]])
         self.rst = [[] for i in range (6)]
         self.power = []
+        # print(labelid)
         for i in range(batchnum):
             if batchnum == 1:
                 X_train, X_test, y_train, y_test = self.X, self.X, self.y, self.y
             else:
-                X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=i)
+                X_train, X_test, y_train, y_test = train_test_split(self.X, self.y,
+                                                                    test_size=test_size, 
+                                                                    random_state=i+1)
             # fittin polynomial's indexs
-            param_grid = {'polynomialfeatures__degree': np.arange(1, 4)}
+            param_grid = {'polynomialfeatures__degree': np.arange(1, 5)}
             model = make_pipeline(PolynomialFeatures(), LinearRegression())
-            grid = GridSearchCV(model, param_grid, n_jobs = -1, cv = 5)
-            # print(X_train, y_train)
+            # n_jobs should not be changed!
+            grid = GridSearchCV(model, param_grid, cv = 5)
+
             grid.fit(X_train, y_train)
             y_pred = grid.predict(X_test)
             linear = grid.best_estimator_.named_steps['linearregression']
@@ -108,7 +112,7 @@ class AutoTrain:
         combinations = []
         bits = len(ids) # 6
         # Use bin to generate labels
-        for i in range(2**bits):
+        for i in range(1, 2**bits):
             label = bin(i).rjust(bits,'0')[-bits:]
             tag = []
             for j, ltr in enumerate(label):
@@ -123,7 +127,8 @@ class AutoTrain:
     def combineFit(self, labelid, batchnum):
         # try to sort with binary
         combinations = self.__getCombinations(labelid)
-        results = [self.__batchTrain(labelid = comb, batchnum = batchnum, rm_ratio = 0) for comb in combinations]
+        # print(combinations)
+        results = [self.batchTrain(labelid = comb, batchnum = batchnum, rm_ratio = 0) for comb in combinations]
         results.sort(key = lambda x : x["R² Score"], reverse = True)
         return results
     
@@ -141,11 +146,11 @@ class AutoTrain:
     
     def fullFit(self, labelid, test_size = 0.2, batchnum = 100, rm_ratio = 0.2, prt = True):
         if test_size == 0:
-            result = self.__batchTrain(labelid = labelid, test_size = test_size, rm_ratio = rm_ratio)
+            result = self.batchTrain(labelid = labelid, test_size = test_size, rm_ratio = rm_ratio)
             self.model = self.rst[5][0]
             if prt: print("On 110 Single trainning:")
         else:
-            result = self.__batchTrain(labelid = labelid, batchnum = batchnum, test_size = test_size, rm_ratio = rm_ratio)
+            result = self.batchTrain(labelid = labelid, batchnum = batchnum, test_size = test_size, rm_ratio = rm_ratio)
             if prt: print("On 110 Gross trainning:")
             self.model = self.GrossModel(self.rst[5])
             y_pred = self.model.predict(self.X)
@@ -183,7 +188,7 @@ class AutoTrain:
         combinations = self.__getCombinations(labelid)
         results = []
         for comb in combinations:
-            modeldict = self.__batchTrain(labelid = comb, test_size = 0, batchnum = 1, rm_ratio = 0)
+            modeldict = self.batchTrain(labelid = comb, test_size = 0, batchnum = 1, rm_ratio = 0)
             self.model = self.rst[5][0]
             dic = self.testOn(testbatch, comb)
             dic["labels"] = [self.Labels[i] for i in comb]
@@ -205,32 +210,41 @@ def UnitedModel(modelrank, ModelRank, sortkey = "R² Score"):
     index = 0.8 if sortkey == "R² Score" else 1.25
     models.sort(key = lambda x: x[sortkey]+x[sortkey.lower()]*index, reverse = reverse)
     # Choose the best models for predictions
-    best_models = [models[0]]
+    # best_models = [models[0]]
+    best_models = []
     
     # can adjust whether to save raw MPM predictions
     Tags = [['OT_Int (0-255)', 'OT_Max (0-255)'],
            # ['MPM_on (0-255)', 'MPM_off (0-255)'],
             ['Calib_on', 'Calib_off']]
-    Bool = [True]*len(Tags)
+
     Extra = ['Laser Power (W)', 'Scanning Speed (mm/s)']
     for model in models:
-        for i, Tag in enumerate(Tags):
-            if Bool[i] and model["labels"] in [Tag + Extra, [Tag[0]]+Extra, [Tag[1]]+Extra]:
-                best_models.append(model)
-                Bool[i] = False
+        if model["labels"] in [
+               # Tags[0] + Extra, 
+                               #[Tags[0][0]]+Extra, 
+                               [Tags[0][1]]+Extra,
+                               ]:
+            best_models.append(model)
+            break
+    for model in models:
+        if model["labels"][0] in Tags[0] and model["labels"][1] in Tags[1]:
+            best_models.append(model)
+            break
+            
     return best_models
 
 # save models in format of .pkl
-def SaveModelist(models):
+def SaveModelist(dirct, models):
     for model in models: 
         filename = ''
         for name in model['labels'][:-2]:
             filename += (name+',')
-        filename = 'models/'+filename[:-1] + '.pkl'
+        filename = dirct+filename[:-1] + '.pkl'
         with open(filename,"wb") as f:
             pickle.dump(model, f)
 
-
+ 
 if __name__ == "__main__":
     Labels = ['OT_Int (0-255)',         # 0
               'OT_Max (0-255)',         # 1
@@ -243,12 +257,12 @@ if __name__ == "__main__":
               'Scanning Speed (mm/s)']  # 8
     labelid = list(range(6))
     output = ['D_mean (µm)', 'W_mean (µm)']
-    trainner = AutoTrain('RESULT.csv', Labels, output, outputid = 0)
-    trainer = AutoTrain('28Case/28_result.csv', Labels, output, outputid = 0)
+    trainner = AutoTrain('RESULT.csv', Labels, output, outputid = 1)
+    trainer = AutoTrain('28Case/28_result.csv', Labels, output, outputid = 1)
     cov2 = trainer.getCovMat()
     cov = trainner.getCovMat()
     modelrank = trainner.combineFit(labelid = labelid, batchnum = 100)
-    #result = trainner.fullFit(labelid, test_size = 0, batchnum = 1, rm_ratio = 0)
+    # result = trainner.fullFit(labelid, test_size = 0, batchnum = 1, rm_ratio = 0.2)
     ModelRank = trainner.CombineFit(trainer, labelid)
     models = UnitedModel(modelrank, ModelRank, sortkey = "R² Score")
-    SaveModelist(models)
+    SaveModelist('models/modelsImageW/', models)

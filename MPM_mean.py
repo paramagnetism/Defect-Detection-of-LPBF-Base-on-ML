@@ -18,6 +18,10 @@ class MPM_mean(FindRect):
             self.__type__ = 'MPM_mean_graph'
         else:  
             self.__type__ = 'MPM_mean_excel'
+            
+    def morphoperation(self, close_kernel_size, show = False):
+        super().morphoperation(close_kernel_size, show = show)
+        self.erosion = cv2.dilate(self.erosion, (close_kernel_size, close_kernel_size), iterations = 1)    
         
     def cal_mean(self, pointlist, gap = 0.05, show = False):
         step = (1+gap)/self.divpart
@@ -73,19 +77,23 @@ class MPM_mean(FindRect):
             self.mean = [sum(strip)/len(strip) for strip in self.strips]
 
 
-if __name__ == '__main__':
+if __name__ == '__main__': 
     typ = "on"
-    
     # point_list = Pointlist('./MPM/007_200_00-x.csv', './MPM/007_200_00-y.csv' ,'./MPM/007_200_00-'+typ+'-axis.csv', params = '-Y')
     # point_list = Pointlist('./28Case/MPM/mpm_x.csv', './28Case/MPM/mpm_y.csv' ,'./28Case/MPM/mpm_'+typ+'.csv', params = 'anticlock')
     # gray = point_list.imshow(show = True)
-    # findrect = MPM_mean(gray, rectnum = 27)
-    findrect = MPM_mean('E:\MPMTIFF/Vaildation print 31102023_SI246120231031190932_001_320_00.mpm_ma_'+typ+'axis.tif', rectnum = 22)
+    # findrect = MPM_mean(gray, rectnum = 27)  
+    
+    #findrect = MPM_mean('E:/MPMTIFF/Vaildation print 31102023_SI246120231031190932_007_200_00.mpm_ma_'+typ+'axis.tif', rectnum = 22)
+    findrect = MPM_mean('E:/27 MPM figures/16bit TIFF/mpm_27_doe_SI246120230518190639_005_550_00.mpm_ma_'+typ+'axis.tif', rectnum = 27)
+
     findrect.divpart = 1
     findrect.threshold(3)
-    findrect.morphoperation(15)
-    findrect.get_rotate(show = True)
-    findrect.find_inner_rects(show = True)
+    findrect.morphoperation(15, show = False)
+    
+    findrect.get_rotate(show = False) 
+    
+    findrect.find_inner_rects(show = False)
     # findrect.FullProcess()
     
     #findrect.cal_mean(point_list, show = True)
@@ -93,7 +101,9 @@ if __name__ == '__main__':
     
     findrect.matching_strip()
     
-    #   xls = XLS(loadname = "./OT/validation data V3.xlsx", loadpage = "Results")
-    #xls = XLS(loadname = "./28Case/28_result.xlsx", loadpage = "Sheet1")
-    #xls.save("./28Case/MPM/result-"+typ+".xlsx", findrect.strip_color)
-    #   xls.save("./MPM/Imgresult-"+typ+".xlsx", findrect.strip_color)
+    xls = XLS(loadname = "./28Case/28_result.xlsx", loadpage = "Sheet1")
+    xls.save("./28Case/MPM/result-"+typ+".xlsx", findrect.strip_color)
+    #xls = XLS(loadname = "./OT/validation data V3.xlsx", loadpage = "Results")
+    #xls.save("./MPM/Imgresult-"+typ+".xlsx", findrect.strip_color)
+
+    

@@ -59,7 +59,7 @@ class Model3D:
       
     def _ReadModels(self, dirct = 'models/'):
         models = []
-        for root, dirs, files in os.walk(dirct):
+        for root, dirs, files in os.walk(dirct+'modelsImageD/'):
             filenames = [os.path.join(root, filename) for filename in files]
             
             # Sorted models by length of filenames
@@ -70,8 +70,24 @@ class Model3D:
                 loaded = pickle.load(f)
             models.append(loaded)
         self.model = models[0]['model']
-        self.OTmodel = models[1]['model']                                               
-        self.Downskin = models[3].predict(np.array([self._Settings]))[0]
+        self.OTmodel = models[1]['model']        
+        
+        for root, dirs, files in os.walk(dirct+'modelsImageW/'):
+            filenames = [os.path.join(root, filename) for filename in files]
+            
+            # Sorted models by length of filenames
+            filenames.sort(key = lambda x: -len(x))
+            
+        for filename in filenames:
+            with open(filename,"rb") as f:
+                loaded = pickle.load(f)
+            models.append(loaded)
+        self.modelW = models[0]['model']
+        self.OTmodelW = models[1]['model']
+        
+        with open(dirct+'Dskin.pkl',"rb") as f:
+            loaded = pickle.load(f)                            
+        self.Downskin = loaded.predict(np.array([self._Settings]))[0]
         print("Applied all downskin depth: "+str(self.Downskin))
         
         
@@ -81,7 +97,7 @@ class Model3D:
             if general:
                 MPM = FindContour(MPM_root, rectnum = rectnum)
                 OT = FindContour(OT_picname, rectnum = rectnum)
-                MPM.FullProcess()
+                MPM.FullProcess(show = False)
                 
             else:
                 OT = OT_mean(OT_picname, rectnum = rectnum)
@@ -111,11 +127,15 @@ class Model3D:
                     
             self.rectnum = rectnum
             self.region = MPM.erosion.astype(np.float32)
-            # Calculate OT + MPM
+            # Calculate OT + MPM          
             if len(MPM.mean) == rectnum and min(MPM.mean):
                 OT.erosion = MPM.erosion
-                OT.get_rotate()
-                OT.find_inner_rects()
+                if general:
+                    OT.get_contours()
+                else:
+                    OT.get_rotate()
+                    OT.find_inner_rects()
+                    
                 OT.cal_mean()
                 self.OT_strip = OT.mean
                 self.MPM_strip = MPM.mean
@@ -143,11 +163,18 @@ class Model3D:
             self.OT.erosion[slice_1.region == 0] = 0
             self.region[self.region == 0] = self.OT.erosion[self.region == 0]
             self.OT.erosion = self.region.astype(np.uint8)
-            self.OT.get_rotate()
-            self.OT.find_inner_rects()
+            self.OT.get_contours(show = False)
             self.OT.cal_mean()
             
-            assert len(self.OT.mean) == self.rectnum
+            try:
+                assert len(self.OT.mean) == self.rectnum
+            except AssertionError:
+                self.OT.get_contours(show = True)
+                self.OT.cal_mean()
+                print(len(self.OT.contours))
+                print(len(self.OT.mean))
+                print(self.rectnum)
+                
             self.OT_strip = self.OT.mean
             self.ctrs = self.OT.ctrs
             self.contours = self.OT.contours
@@ -280,6 +307,7 @@ class Model3D:
             '''
             
             depth = []
+            width = []
             if self.__buffer[i].MPM_strip == 0:
                 try:
                     assert i > start_idx
@@ -287,10 +315,11 @@ class Model3D:
                     print("First MPM deprecated!")
                     
                 self.deprecated_mpm.append(i)
-                # self.__buffer[i].
                 for otstrip in self.__buffer[i].OT_strip:
                     depth.append(self.OTmodel.predict(
                         np.array([[otstrip]+self._Settings])))
+                    width.append(self.OTmodelW.predict(
+                        np.array([[otstrip]+self._Settings]))[0])
             
             else:  # Use MPM and OT together to calculate the depth
                 last_depcount = 0
@@ -321,7 +350,7 @@ class Model3D:
                 
                 # caculate mean mpm for nearest figure
                 slices = [self.__buffer[j].MPM_strip for j in nearest \
-                          if self.__buffer[j].MPM_strip != 0]
+                          if (self.__buffer[j].MPM_strip != 0 and j != i)]
                 Std = np.mean(np.array(slices), axis = 0)
                 
                 # normalize mpm and predict depth
@@ -329,12 +358,22 @@ class Model3D:
                     OTmean = self.__buffer[i].OT_strip[j]
                     calib = mpmstrip/Std[j]/self._Settings[1]*10000
                     depth.append(self.model.predict(np.array([[OTmean, calib] + self._Settings])))
+                    width.append(self.modelW.predict(np.array([[OTmean, calib] + self._Settings]))[0])
             
-            # self.depths.append(depth)
-            # paint the depth on map
+            # paint the depth and width on map
             # for j in idxmask:
             for j in [i for i in range(len(depth))]:
                 # !! This mask should set to np.zeros every time calling the function
+                iters = int(np.floor(width[j]/100))
+                if width[j] - iters > 2/3:
+                    iters += 1 
+                mask = cv2.drawContours(np.zeros((2500,2500)), self.__buffer[i].contours, j, (255))
+                mask = cv2.dilate(mask, (3,3), iters)
+                if width[j] - iters > 1/3 and width[j] - iters < 2/3:
+                    mask = cv2.dilate(mask, (2,2))
+                
+                self.__buffer[i].region = np.maximum(mask, self.__buffer[i].region).astype(np.uint8)
+                
                 cv2.floodFill(self.__buffer[i].region, np.zeros((2502, 2502)).astype(np.uint8), 
                               self.__buffer[i].ctrs[j], depth[j], 
                               1, 1, cv2.FLOODFILL_FIXED_RANGE)
@@ -525,23 +564,28 @@ if __name__ == '__main__':
     openname = model3Dname + '_after.npy'
     if os.path.exists(openname):
         obj = Model3D(openname, 
+                      
                       ['SI246120231031190932_',
                        'Vaildation print 31102023_SI246120231031190932_'])
                       # ['SI246120230324152157_',
                       # 'MPM-Mold-Figures_SI246120230324152157_'])
     else:
-        # obj = Model3D(['E:\OT', 'E:\MPMTIFF'])
-        obj = Model3D(['C:/AAAWeichen/Mold (important!)/OT', 
-                       'C:/AAAWeichen/Mold (important!)/MPMTIFF'])
+        obj = Model3D(['E:\OT', 'E:\MPMTIFF'],
+                      
+                      ['SI246120231031190932_',
+                       'Vaildation print 31102023_SI246120231031190932_'])
+        # obj = Model3D(openname, 
+        #              ['C:/AAAWeichen/Mold (important!)/OT', 
+        #               'C:/AAAWeichen/Mold (important!)/MPMTIFF'])
     
-        obj.build(Range = [0, 249],
+        obj.build(Range = [195, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         obj.updateDepth(savename = model3Dname)
     
     # Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
-    Slice = obj.CutSlice((638,730), (1598,365), originalPath = model3Dname+ '_original.npy')
+    Slice = obj.CutSlice((638,730), (1960,365), originalPath = model3Dname+ '_original.npy')
     fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
-    obj.ShowSlice(202)
+    # obj.ShowSlice(202)
     
