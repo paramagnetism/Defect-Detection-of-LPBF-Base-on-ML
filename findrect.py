@@ -56,9 +56,10 @@ class FindContour:
     
     # close operation removing noise
     # the kernel should be bigger with larger threshold
-    def morphoperation(self, close_kernel_size = 2, show = False): 
-        kernel = np.ones((close_kernel_size, close_kernel_size), dtype=np.uint8)
-        self.erosion = cv2.morphologyEx(self.erosion, cv2.MORPH_CLOSE, kernel = kernel)
+    def morphoperation(self, close_kernel_size = 3, show = False): 
+        # kernel = np.ones((close_kernel_size, close_kernel_size), dtype=np.uint8)
+        self.erosion = cv2.medianBlur(self.erosion, close_kernel_size)
+        # self.erosion = cv2.morphologyEx(self.erosion, cv2.MORPH_CLOSE, kernel = kernel)
         if show:
             self._imshow(self.erosion)
         

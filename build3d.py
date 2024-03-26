@@ -148,7 +148,7 @@ class Model3D:
                 # Caculate only with OT
                 self.OT = OT
                 self.OT.threshold(3)
-                self.OT.morphoperation(15)
+                self.OT.morphoperation(3)
         
         def reconstruct(self, slice_1):
             '''
@@ -161,20 +161,30 @@ class Model3D:
             '''
             # Cut the region out for OT to caculate
             self.OT.erosion[slice_1.region == 0] = 0
+            #cv2.imshow("OT1", cv2.resize(self.OT.erosion,(1000,1000)))
             self.region[self.region == 0] = self.OT.erosion[self.region == 0]
-            self.OT.erosion = self.region.astype(np.uint8)
-            self.OT.get_contours(show = False)
+            #cv2.imshow("OT2", cv2.resize(self.region,(1000,1000)))
+            self.OT.erosion = cv2.morphologyEx(self.region.astype(np.uint8), cv2.MORPH_OPEN,(5, 5))
+            
+            # self.OT.erosion = cv2.erode(self.OT.erosion, (2, 2)) 
+            #cv2.imshow("OT3", cv2.resize(self.OT.erosion,(1000,1000)))
+            #cv2.waitKey(0)
+            
+            self.OT.get_contours()
             self.OT.cal_mean()
             
             try:
                 assert len(self.OT.mean) == self.rectnum
             except AssertionError:
+                cv2.imshow('ee',self.OT.erosion)
+                cv2.waitKey(0)
                 self.OT.get_contours(show = True)
                 self.OT.cal_mean()
                 print(len(self.OT.contours))
                 print(len(self.OT.mean))
                 print(self.rectnum)
-                
+            
+            self.region = self.OT.erosion 
             self.OT_strip = self.OT.mean
             self.ctrs = self.OT.ctrs
             self.contours = self.OT.contours
@@ -247,7 +257,7 @@ class Model3D:
                 
                 # print('load' + str(i) + MPM_name)
                 # Check if MPM is corrupted
-                if i-1 in self.__buffer.keys():
+                if i-1 in self.__buffer.keys() and self.expected_rect[i-1] == self.expected_rect[i]:
                     if self.__buffer[i].MPM_strip == 0:
                         self.__buffer[i].reconstruct(self.__buffer[i-1])
         
@@ -372,7 +382,7 @@ class Model3D:
                 if width[j] - iters > 1/3 and width[j] - iters < 2/3:
                     mask = cv2.dilate(mask, (2,2))
                 
-                self.__buffer[i].region = np.maximum(mask, self.__buffer[i].region).astype(np.uint8)
+                self.__buffer[i].region = np.maximum(mask, self.__buffer[i].region).astype(int)
                 
                 cv2.floodFill(self.__buffer[i].region, np.zeros((2502, 2502)).astype(np.uint8), 
                               self.__buffer[i].ctrs[j], depth[j], 
@@ -401,7 +411,7 @@ class Model3D:
     def updateDepth(self, savename, Downskin = True):
         # update depth
         if Downskin:
-            self.Slices[self.Slices > 0] += self.Downskin
+            self.Slices[self.Slices > 0] += int(self.Downskin)
         
         for i in range(self.Slices.shape[2]-1):
             upper = self.Slices[:,:,-i-1]-30
@@ -547,6 +557,7 @@ class Model3D:
         #print(dx, dy)
         points = [(round(begin[0]+d*dx), round(begin[1]+d*dy))  for d in range(round(dis))]
         Slice = np.flipud(np.array([self.Slices[pts[1], pts[0], :] for pts in points]).T)
+
         origin = np.flipud(np.array([original[pts[1], pts[0], :] for pts in points]).T)
         Real = cv2.resize(Slice, (round(Slice.shape[1]*10/3), Slice.shape[0]), 
                           interpolation=cv2.INTER_NEAREST)
@@ -578,14 +589,14 @@ if __name__ == '__main__':
         #              ['C:/AAAWeichen/Mold (important!)/OT', 
         #               'C:/AAAWeichen/Mold (important!)/MPMTIFF'])
     
-        obj.build(Range = [195, 249],
+        obj.build(Range = [0, 249],
                   idxmask = [i for i in range(22)],
                   savename = model3Dname)
         obj.updateDepth(savename = model3Dname)
     
     # Slice = obj.CutSlice((354,1330), (1947,910), originalPath = model3Dname+ '_original.npy')
     Slice = obj.CutSlice((638,730), (1960,365), originalPath = model3Dname+ '_original.npy')
-    fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
+    # fig = obj.Model_3D_dots(originalPath = model3Dname+ '_original.npy')
     
     # obj.ShowSlice(202)
     
