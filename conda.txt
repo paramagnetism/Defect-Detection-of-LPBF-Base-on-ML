@@ -1,0 +1,9 @@
+opencv
+openpyxl
+numpy
+mayavi
+tqdm
+scikit-learn
+scipy
+pandas
+matplotlib
