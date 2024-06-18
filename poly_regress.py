@@ -3,6 +3,9 @@
 Created on Mon Jan 15 09:18:27 2024
 
 @author: Wilson Li
+
+This File is to do poly regression with excel data and save the optim OT
+and OT + caliberated MPM image to .pkl files
 """
 import pandas as pd
 import numpy as np

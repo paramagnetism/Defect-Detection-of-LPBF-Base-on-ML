@@ -3,6 +3,12 @@
 Created on Tue May  7 16:16:46 2024
 
 @author: Admin
+
+This is the final model to generate prediction of the region
+The model use OT image only.
+
+scanned_image: XCT image
+
 """
 import os
 import cv2
@@ -34,23 +40,40 @@ def idx2name(i,  OT_type = "Int"):
     OT_name = os.path.join(OT_root, OT_name)
     return OT_name
 
+# Index of the region
 IDX = 3
+# Leave 50 pixel of margin from the region generated from the first image 
 margin = 50
+# How many layer of slices
 length = 1904
+# The width&height of each image
 size = 2000
+# The threshold of selected region. If region aera < 100 pixel then omit
 minaera = 100
+# The threshold use for binarize the OT image
 thresh = 3
-
-# of scanned image
+# Right/up move of pixel of scanned image
 right_adj = 1
 up_adj = 0
-# of origianl image
+# Right/up move of pixel of origianl image
 Right_adj = 2
 Up_adj = 1
+# Try different delay of slices index.
+# The best one is 27/28 delay of real scanned XCT result after OT image index
 delay = 27
+# Whether show the result
 show = False
+# Layers index that are irregular on Original Image 
 excluded = list(range(450, 491))+list(range(707, 715))+list(range(607, 619))+list(range(0,11))
 
+"""
+The real part of the programme begins here
+
+First, choose top 20 layers to caculate the rotation matrix from leaned OT image
+vertical position as scanned XCT image and initial printings settings by 
+caculation on average rotation angle
+  
+"""
 Mask = np.zeros((size,size),np.uint8)
 img = cv2.imread(idx2name(0), cv2.IMREAD_GRAYSCALE)
 _, img = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
@@ -119,6 +142,13 @@ rotation_matrix[1, 2] += h_ // 2 - ctr[1]
 bound = [round(Position[0]-w_/2),round(Position[0]-w_/2)+bound_w, 
          round(Position[1]-h_/2),round(Position[1]-h_/2)+bound_h]
 
+"""
+Till here, first part end.
+The rotation matrix of OT image and boundaries get.
+
+The following part caculate all layers comparison, save plot np array.
+"""
+
 buffer = np.zeros((bound[3]-bound[2], bound[1]-bound[0]))
 with open('../models/modelsImageD/OT_Int (0-255).pkl',"rb") as f:
     model = pickle.load(f)['model']
@@ -126,10 +156,11 @@ with open('../models/Dskin.pkl',"rb") as f:
     dskin = pickle.load(f)
 constDepth = dskin.predict(np.array([[370, 1300],]))    
 
-summ = 0
+
 transformed = []; before = []; fly = []; idxs = []
 begin = 0
 end = 736 - delay
+# The first 40 layers considered to be containing downskin region
 downskin = 40
 
 Slices = [np.zeros((bound_h, bound_w), np.uint8)]
@@ -138,6 +169,17 @@ sliceS = [np.zeros((bound_h, bound_w), np.uint8)]
 maximprov = 0
 circumstances = []
 b4Biases = []
+"""
+Name interprtetion:
+-------------------
+    img: OT image
+    org: Initial setting.
+    src: Scanned Xct image. Used as ground truth
+    scanned_image: Scanned XCT image cut region
+    origina_image: Initial setting image cut region
+    b4: For comparison, image before updating the depth of layers
+    
+"""
 for idx in tqdm(reversed(range(736 - delay))): 
     img = cv2.imread(idx2name(idx+delay), cv2.IMREAD_GRAYSCALE)
     org = cv2.imread('../pngSlicer/outputs/png_original/{0}.png'.format(idx + delay + 1), cv2.IMREAD_GRAYSCALE)
@@ -150,7 +192,8 @@ for idx in tqdm(reversed(range(736 - delay))):
     img = cv2.bitwise_and(img, Mask)[xmin:xmax,ymin:ymax]                                              
     img = cv2.warpAffine(img, rotation_matrix, (bound_w, bound_h))
     _, OTFly = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
-        
+    
+    # Use initial setting to cut OT image as for denoise
     img[original_image == 0] = 0 
     
     # Caculate the depth for contours
@@ -168,10 +211,17 @@ for idx in tqdm(reversed(range(736 - delay))):
         
     for contour in contours2:
         circumstance += cv2.arcLength(curve=contour, closed=True)
-        
+    # From up to down, each layer -30 um's depth
     buffer = np.maximum(buffer-30, Depth) 
     transformed_image[buffer > 0] = 255 
+    """
+    For comparison, SNR is the real result
     
+    flyed:  The OT image stack directly together witout denoise.
+    aveBias: Our model predict result
+    b4Bias: The result get only by denoise but not updated depth.
+    
+    """
     SNR = 10* math.log((scanned_image>0).sum()/(transformed_image != scanned_image).sum(),10)
     flyed = 10* math.log((scanned_image>0).sum()/(OTFly != scanned_image).sum(),10)
     aveBias = ((transformed_image!=scanned_image)>0).sum()/circumstance/8
@@ -261,15 +311,21 @@ plt.ylabel("SNR(dB)")
 plt.legend(['Raw In-situ Image model','Reconstructed model', 'Denoised Only model'], loc="upper left")
 plt.show()
 
+# Improvement on SNR on denoise
 Improve1 = (np.array(fly[-downskin:])-np.array(before[-downskin:])).mean()
+# Improvement on SNR on denoise + update depth
 Improve2 = (np.array(fly[-downskin:])-np.array(transformed[-downskin:])).mean()
+# mean SNR on each kind of image.
 mean1 = np.array(fly[-downskin:]).mean()
 mean2 = np.array(transformed[-downskin:]).mean()
 mean3 = np.array(before[-downskin:]).mean()
+# Use another standard:
+# The average error width of pixels to its circumstance
 
 circumstances = np.array(circumstances)
 b4Biases = np.array(b4Biases)
 ave = circumstances.mean()
+# The downskin region use as 50 layers here
 dskinave = circumstances[-50:].mean()
 #print(delay)
 #print(dskinave)

@@ -3,6 +3,12 @@
 Created on Tue Jun  4 16:03:16 2024
 
 @author: Admin
+
+This file is for quick launch for Jiazhao to show the comparison of our predicted
+model from mayavi.
+
+To do:
+    Save the model from numpy array to STL file.
 """
 
 import numpy as np

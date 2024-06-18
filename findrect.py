@@ -15,7 +15,7 @@ from data2excel import csv_read
 class FindContour:
     """
     The most general method for caculating OT and MPM image.
-    
+    Threshold
     
     """
     def __init__(self, filename, rectnum):

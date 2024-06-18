@@ -3,6 +3,10 @@
 Created on Mon Feb 19 18:25:58 2024
 
 @author: Admin
+
+This is a informal file just to generate downskin region model from the 9 data.
+
+The result is simply a 1-order model with 2 parameters.
 """
 from poly_regress import *
 from sklearn.linear_model import LinearRegression

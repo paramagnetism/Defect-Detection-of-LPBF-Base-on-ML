@@ -3,6 +3,8 @@
 Created on Tue Jan 23 09:48:16 2024
 
 @author: Wilson Li
+
+To caculate mean pixel vvalue of serval MPM/OT image
 """
 import os
 from MPM_mean import Pointlist, MPM_mean

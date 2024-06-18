@@ -3,6 +3,8 @@
 Created on Thu Mar 21 15:28:20 2024
 
 @author: Admin
+
+This file is of no use. 
 """
 import cv2
 import meshio

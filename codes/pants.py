@@ -3,6 +3,10 @@
 Created on Tue Mar 19 14:48:41 2024
 
 @author: Admin
+
+This program predicts with the pants region with different length of downskin
+region width with the fitted model
+
 """
 import os
 import cv2

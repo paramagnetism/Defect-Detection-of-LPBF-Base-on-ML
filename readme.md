@@ -18,3 +18,8 @@ Find the suitable function for melting pool depth prediction
 
 ## build3d.py 
 Build the 3D model in folder Model3D/
+
+## codes/rotater.py
+The final model to predict only with OT image and initial setting STL file.
+
+Other usages are all written in each file's title.

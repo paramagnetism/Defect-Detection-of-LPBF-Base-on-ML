@@ -3,6 +3,8 @@
 Created on Wed Mar 20 12:02:10 2024
 
 @author: Admin
+
+This file is of no use.
 """
 import numpy as np
 import cv2
