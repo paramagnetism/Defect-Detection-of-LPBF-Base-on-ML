@@ -311,20 +311,6 @@ plt.ylabel("SNR(dB)")
 plt.legend(['Raw In-situ Image model','Reconstructed model', 'Denoised Only model'], loc="upper left")
 plt.show() 
 
-coeff = result["Coefficient"]
-formula = 'Depth' + ' = ' + str(self.coeff[0])
-for i in range(len(self.power)-1):  # Model's Power
-    coef = self.coeff[i+1]
-    if coef > 0:
-        formula += ' + ' # plus
-    else: formula += ' ' # minus
-    formula += str(coef)+' '
-    for j, pw in enumerate(self.power[i+1]):
-        if pw != 0 :
-            formula += self.Labels[labelid[j]]
-            if pw > 1:
-                formula += '^'+str(pw)+' '
-print(formula)
 
 # Improvement on SNR on denoise  
 Improve1 = (np.array(fly[-downskin:])-np.array(before[-downskin:])).mean()
