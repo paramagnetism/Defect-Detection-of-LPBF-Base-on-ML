@@ -47,7 +47,6 @@ class OT_mean(FindRect):
                 cv2.fillConvexPoly(mask, pts, (255))
                 self.mean.append(cv2.mean(self._gray, mask)[0])
                 
-                
         if show:
             self._imshow(self.src)
     

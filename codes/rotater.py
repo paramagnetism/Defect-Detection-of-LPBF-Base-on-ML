@@ -181,9 +181,9 @@ Name interprtetion:
     
 """
 for idx in tqdm(reversed(range(736 - delay))): 
-    img = cv2.imread(idx2name(idx+delay), cv2.IMREAD_GRAYSCALE)
-    org = cv2.imread('../pngSlicer/outputs/png_original/{0}.png'.format(idx + delay + 1), cv2.IMREAD_GRAYSCALE)
-    src = cv2.imread('../pngSlicer/outputs/png_filled/{0}.png'.format(idx), cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(idx2name(idx+delay), cv2.IMREAD_GRAYSCALE) # OT
+    org = cv2.imread('../pngSlicer/outputs/png_original/{0}.png'.format(idx + delay + 1), cv2.IMREAD_GRAYSCALE) # build
+    src = cv2.imread('../pngSlicer/outputs/png_filled/{0}.png'.format(idx), cv2.IMREAD_GRAYSCALE) # XCT
     scanned_image = src[bound[2]+up_adj:bound[3]+up_adj,
                     bound[0]+right_adj:bound[1]+right_adj]
     original_image = org[bound[2]+Up_adj:bound[3]+Up_adj,
@@ -273,7 +273,7 @@ for idx in tqdm(reversed(range(736 - delay))):
                 break
     # print('Fly:{0}; Before:{1}; transformed:{2}'.format(fly, before, transformed))
     # print(fly)
-    # Demo part
+    # Demo part  
         
     #cv2.waitKey(0)
     Slices.append(transformed_image)
@@ -282,15 +282,15 @@ for idx in tqdm(reversed(range(736 - delay))):
     
 slices.append(slices[0])
 Slices.append(Slices[0])
-sliceS.append(sliceS[0])
+sliceS.append(sliceS[0])   
 Slices = np.array(Slices)
 slices = np.array(slices)
 sliceS = np.array(sliceS)
 np.save('../models/molde/Updated OT Depth', Slices)
-np.save('../models/molde/Original OT', slices)
+np.save('../models/molde/Original OT', slices) 
 np.save('../models/molde/Initial Setting', sliceS)
 cv2.destroyAllWindows()
-
+ 
 x = np.array(idxs)
 fig, axe = plt.subplots()
 axe.plot(x, np.array(fly), x, np.array(transformed))
@@ -302,16 +302,31 @@ plt.show()
 Improve = (np.array(fly)-np.array(transformed)).mean()
 Mean1 = np.array(fly).mean()
 Mean2 = np.array(transformed).mean()
-
+ 
 xx = x[-downskin:]
 fig, axe = plt.subplots()
 axe.plot(xx, np.array(fly[-downskin:]), xx, np.array(transformed[-downskin:]), xx, np.array(before[-downskin:]))
 plt.xlabel("Layers indexs on Downskin Region")
 plt.ylabel("SNR(dB)")
 plt.legend(['Raw In-situ Image model','Reconstructed model', 'Denoised Only model'], loc="upper left")
-plt.show()
+plt.show() 
 
-# Improvement on SNR on denoise
+coeff = result["Coefficient"]
+formula = 'Depth' + ' = ' + str(self.coeff[0])
+for i in range(len(self.power)-1):  # Model's Power
+    coef = self.coeff[i+1]
+    if coef > 0:
+        formula += ' + ' # plus
+    else: formula += ' ' # minus
+    formula += str(coef)+' '
+    for j, pw in enumerate(self.power[i+1]):
+        if pw != 0 :
+            formula += self.Labels[labelid[j]]
+            if pw > 1:
+                formula += '^'+str(pw)+' '
+print(formula)
+
+# Improvement on SNR on denoise  
 Improve1 = (np.array(fly[-downskin:])-np.array(before[-downskin:])).mean()
 # Improvement on SNR on denoise + update depth
 Improve2 = (np.array(fly[-downskin:])-np.array(transformed[-downskin:])).mean()
@@ -321,12 +336,11 @@ mean2 = np.array(transformed[-downskin:]).mean()
 mean3 = np.array(before[-downskin:]).mean()
 # Use another standard:
 # The average error width of pixels to its circumstance
-
 circumstances = np.array(circumstances)
 b4Biases = np.array(b4Biases)
 ave = circumstances.mean()
 # The downskin region use as 50 layers here
-dskinave = circumstances[-50:].mean()
+dskinave = circumstances[-50:].mean() 
 #print(delay)
 #print(dskinave)
 #print(circumstances[-50:].max())
